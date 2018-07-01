@@ -15,22 +15,22 @@ Usage
 qtoml supports the standard ``load``/``loads``/``dump``/``dumps`` API common to
 most similar modules. Usage:
 
-.. code: pycon
+.. code:: pycon
 
-   >>> import qtoml
-   >>> toml_string = """
-   ... test_value = 7
-   ... """
-   >>> qtoml.loads(toml_string)
-   {'test_value': 7}
-   >>> print(qtoml.dumps({'a': 4, 'b': 5.0}))
-   a = 4
-   b = 5.0
-   
-   >>> infile = open('filename.toml', 'r')
-   >>> parsed_structure = qtoml.load(infile)
-   >>> outfile = open('new_filename.toml', 'w')
-   >>> qtoml.dump(parsed_structure, outfile)
+  >>> import qtoml
+  >>> toml_string = """
+  ... test_value = 7
+  ... """
+  >>> qtoml.loads(toml_string)
+  {'test_value': 7}
+  >>> print(qtoml.dumps({'a': 4, 'b': 5.0}))
+  a = 4
+  b = 5.0
+  
+  >>> infile = open('filename.toml', 'r')
+  >>> parsed_structure = qtoml.load(infile)
+  >>> outfile = open('new_filename.toml', 'w')
+  >>> qtoml.dump(parsed_structure, outfile)
 
 Testing
 =======
