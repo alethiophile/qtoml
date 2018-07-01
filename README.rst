@@ -5,7 +5,7 @@ qTOML
 qtoml is another Python TOML encoder/decoder. I wrote it because I found
 uiri/toml too unstable, and PyTOML too slow.
 
-For information concerning the TOML language, see toml-lang/toml.
+For information concerning the TOML language, see `toml-lang/toml <https://github.com/toml-lang/toml>`_.
 
 qtoml currently supports TOML v0.4.0. Features above that are not supported.
 
@@ -35,7 +35,7 @@ most similar modules. Usage:
 Testing
 =======
 
-qtoml is tested against the alethiophile/toml-test test suite, forked from
+qtoml is tested against the `alethiophile/toml-test <https://github.com/alethiophile/toml-test>`_ test suite, forked from
 uiri's fork of the original by BurntSushi. To run the tests, check out the code
 including submodules, install pytest, and run ``pytest`` under the ``tests``
 subdirectory.
