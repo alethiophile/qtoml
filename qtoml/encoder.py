@@ -1,0 +1,146 @@
+#!python3
+
+import datetime
+from .decoder import key_chars
+
+class TOMLEncodeError(Exception):
+    pass
+
+def dump(obj, fp, **kwargs):
+    fp.write(dumps(obj, **kwargs))
+
+def dumps(obj, **kwargs):
+    return TOMLEncoder(**kwargs).dump_sections(obj, [], False)
+
+class TOMLEncoder:
+    # spec-defined string escapes
+    escapes = { "\b": "\\b", "\t": "\\t", "\n": "\\n", "\f": "\\f",
+                "\r": "\\r", "\"": "\\\"", "\\": "\\\\" }
+
+    def __init__(self, encode_none=None):
+        self.encode_none = encode_none
+        self.st = { str: self.dump_str, bool: self.dump_bool,
+                    int: self.dump_int, float: self.dump_float,
+                    datetime.datetime: self.dump_datetime }
+
+    def is_scalar(self, v):
+        if type(v) in [str, bool, int, float, datetime.datetime]:
+            return True
+        if type(v) == list and (len(v) == 0 or self.is_scalar(v[0])):
+            return True
+        if v is None and self.encode_none is None:
+            raise TOMLEncodeError("TOML cannot encode None")
+        elif v is None:
+            return True
+        return False
+
+    def dump_bstr(self, s, multiline=False):
+        delim = '"""' if multiline else '"'
+        rv = delim
+        for i in s:
+            if ord(i) < 32 or i in '\\"':
+                if i == '\n' and multiline:
+                    rv += i
+                elif i in self.escapes:
+                    rv += self.escapes[i]
+                else:
+                    hv = '00' + hex(ord(i))[2:]
+                    rv += "\\u" + hv
+            else:
+                rv += i
+        rv += delim
+        return rv
+
+    def dump_rawstr(self, s, multiline=False):
+        delim = "'''" if multiline else "'"
+        if delim in s:
+            raise TOMLEncodeError("raw string delimiter in raw string")
+        return delim + s + delim
+
+    def dump_str(self, s, multiline_allowed=True):
+        multiline = "\n" in s
+        if (("'" in s and not multiline) or "'''" in s or
+            any(ord(i) < 32 and i != "\n" for i in s) or
+            (multiline and not multiline_allowed)):
+            # can't put these in raw string
+            return self.dump_bstr(s, multiline and multiline_allowed)
+        else:
+            return self.dump_rawstr(s, multiline)
+
+    def dump_bool(self, b):
+        return 'true' if b else 'false'
+
+    def dump_int(self, i):
+        return str(i)
+
+    def dump_float(self, i):
+        return str(i)
+
+    def dump_datetime(self, d):
+        rv = d.isoformat()
+        if rv.endswith("+00:00"):
+            rv = rv[:-6] + "Z"
+        return rv
+
+    def dump_array(self, a):
+        rv = "["
+        if len(a) == 0:
+            return "[]"
+        at = None
+        for i in a:
+            if at is not None:
+                if type(i) != at:
+                    raise TOMLEncodeError("array with mixed type")
+            else:
+                at = type(i)
+            rv += self.dump_value(i)
+            rv += ", "
+        rv = (rv[:-2] if rv.endswith(', ') else rv)
+        return rv + "]"
+
+    def dump_itable(self, t):
+        rv = "{ "
+        for k, v in t.items():
+            rv += f"{self.dump_key(k)} = {self.dump_value(v)}, "
+        return (rv[:-2] if rv.endswith(", ") else rv) + " }"
+
+    def dump_key(self, k):
+        if len(k) > 0 and all(i in key_chars for i in k):
+            return k
+        else:
+            return self.dump_str(k, multiline_allowed=False)
+
+    def dump_value(self, v):
+        if type(v) in self.st:
+            return self.st[type(v)](v)
+        elif type(v) == list:
+            return self.dump_array(v)
+        elif v is None and self.encode_none is not None:
+            return self.dump_value(self.encode_none)
+        else:
+            raise TypeError(f"bad type '{type(v)}' for dump_value")
+
+    def dump_sections(self, obj, obj_name, tarray):
+        rv = ""
+        if obj_name and (any(self.is_scalar(i) for i in obj.values()) or
+                         tarray or len(obj) == 0):
+            rv += "[[" if tarray else "["
+            rv += '.'.join(self.dump_key(i) for i in obj_name)
+            rv += "]]\n" if tarray else "]\n"
+        # we dump first all scalars, then all single tables, then all table
+        # arrays
+        for k, v in obj.items():
+            if self.is_scalar(v):
+                rv += f"{self.dump_key(k)} = {self.dump_value(v)}\n"
+        for k, v in obj.items():
+            if type(v) == dict:
+                if len(rv) > 0:
+                    rv += "\n"
+                rv += self.dump_sections(v, obj_name + [k], False)
+        for k, v in obj.items():
+            if type(v) == list and not self.is_scalar(v):
+                for ent in v:
+                    if len(rv) > 0:
+                        rv += "\n"
+                    rv += self.dump_sections(ent, obj_name + [k], True)
+        return rv
