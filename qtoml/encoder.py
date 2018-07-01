@@ -7,9 +7,30 @@ class TOMLEncodeError(Exception):
     pass
 
 def dump(obj, fp, **kwargs):
+    """Take a dict that can be TOML-encoded, encode it, and write the data to the
+    file-like object fp.
+
+    dump(obj, fp, encode_none=None)
+
+    Because TOML does not support None/null values, by default any structure
+    containing None will error on encode. If you pass the encode_none
+    parameter, None will instead be encoded as that parameter. Sensible values
+    might include 0, empty string, or a unique string sentinel value.
+
+    """
     fp.write(dumps(obj, **kwargs))
 
 def dumps(obj, **kwargs):
+    """Take a dict that can be TOML-encoded, and return an encoded string.
+
+    dumps(obj, encode_none=None)
+
+    Because TOML does not support None/null values, by default any structure
+    containing None will error on encode. If you pass the encode_none
+    parameter, None will instead be encoded as that parameter. Sensible values
+    might include 0, empty string, or a unique string sentinel value.
+
+    """
     return TOMLEncoder(**kwargs).dump_sections(obj, [], False)
 
 class TOMLEncoder:

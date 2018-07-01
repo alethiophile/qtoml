@@ -3,6 +3,9 @@
 import re, datetime
 
 def load(fo):
+    """Load TOML data from a file-like object fo, and return it as a dict.
+
+    """
     s = fo.read()
     return loads(s)
 
@@ -393,6 +396,7 @@ def proc_kl(rv, kl, tarray, p):
         return c[fk]
 
 def loads(string):
+    """Load TOML data from the string passed in, and return it as a dict."""
     rv = {}
     cur_target = rv
     p = ParseState(string)
