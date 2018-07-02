@@ -65,7 +65,7 @@ class TOMLEncoder:
                 elif i in self.escapes:
                     rv += self.escapes[i]
                 else:
-                    hv = '00' + hex(ord(i))[2:]
+                    hv = "{:04x}".format(ord(i))
                     rv += "\\u" + hv
             else:
                 rv += i
@@ -148,20 +148,29 @@ class TOMLEncoder:
             rv += "[[" if tarray else "["
             rv += '.'.join(self.dump_key(i) for i in obj_name)
             rv += "]]\n" if tarray else "]\n"
+        dumped_keys = set()
         # we dump first all scalars, then all single tables, then all table
         # arrays
         for k, v in obj.items():
             if self.is_scalar(v):
                 rv += f"{self.dump_key(k)} = {self.dump_value(v)}\n"
+                dumped_keys.add(k)
         for k, v in obj.items():
             if type(v) == dict:
                 if len(rv) > 0:
                     rv += "\n"
                 rv += self.dump_sections(v, obj_name + [k], False)
+                dumped_keys.add(k)
         for k, v in obj.items():
             if type(v) == list and not self.is_scalar(v):
                 for ent in v:
                     if len(rv) > 0:
                         rv += "\n"
                     rv += self.dump_sections(ent, obj_name + [k], True)
+                dumped_keys.add(k)
+        all_keys = set(obj.keys())
+        if dumped_keys != all_keys:
+            not_dumped = all_keys.difference(dumped_keys)
+            raise TOMLEncodeError("got object of non-encodable type on key "
+                                  f"'{not_dumped.pop()}'")
         return rv

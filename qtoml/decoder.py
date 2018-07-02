@@ -250,6 +250,7 @@ def parse_inline_table(p):
     p.advance_through_class(" \t")
     while True:
         if p.at_string('}'):
+            p.advance(1)
             break
         k, p = parse_key(p)
         p.advance_through_class(" \t")
@@ -422,8 +423,9 @@ def loads(string):
             toplevel_targets.add(id(cur_target))
         else:
             (k, v), p = parse_pair(p)
-            if k in cur_target:
-                raise TOMLDecodeError(f"Key '{k}' is repeated", p)
-            cur_target[k] = v
+            if k is not None:
+                if k in cur_target:
+                    raise TOMLDecodeError(f"Key '{k}' is repeated", p)
+                cur_target[k] = v
         n, p = parse_throwaway(p)
     return rv
