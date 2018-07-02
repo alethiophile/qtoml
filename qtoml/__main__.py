@@ -61,16 +61,21 @@ def main():
 @main.command()
 @click.option("--encode-none", type=str, default=None,
               help="Value to use in place of None/null")
+@click.option("--test/--no-test", default=False,
+              help="Untag data for toml-test")
 @click.argument('inp', type=click.File('r'))
 @click.argument('out', type=click.File('w'))
-def encode(inp, out, encode_none):
+def encode(inp, out, encode_none, test):
     """Encode TOML from JSON. Reads from the file INP, writes to OUT; you can pass
     '-' to either to use stdin/stdout."""
     try:
         encode_none = int(encode_none)
     except (ValueError, TypeError):
         pass
-    dump(json.load(inp), out, encode_none=encode_none)
+    val = json.load(inp)
+    if test:
+        val = untag(val)
+    dump(val, out, encode_none=encode_none)
 
 @main.command()
 @click.option('--test/--no-test', default=False,
