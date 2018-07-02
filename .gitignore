@@ -3,3 +3,4 @@ qtoml.egg-info
 .pytest_cache
 build
 dist
+tests/.coverage

@@ -1,8 +1,8 @@
 #!python3
 
-import pytest, os, json
+import pytest, json
 import qtoml
-from qtoml.__main__ import type_tag, untag
+from qtoml.__main__ import untag
 
 def test_valid_decode(valid_case):
     json_val = untag(json.loads(valid_case['json']))
