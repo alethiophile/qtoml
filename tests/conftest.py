@@ -4,10 +4,11 @@ pj = os.path.join
 TEST_DIR = 'toml-test/tests'
 
 def get_tomltest_cases():
+    expect_dirs = ['invalid', 'invalid-encoder', 'valid']
     dirs = sorted(os.listdir(TEST_DIR))
-    assert dirs == ['invalid', 'invalid-encoder', 'valid']
+    assert all(i in dirs for i in expect_dirs)
     rv = {}
-    for d in dirs:
+    for d in expect_dirs:
         rv[d] = {}
         files = os.listdir(pj(TEST_DIR, d))
         for f in files:
