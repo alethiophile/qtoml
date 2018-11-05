@@ -7,7 +7,7 @@ uiri/toml too unstable, and PyTOML too slow.
 
 For information concerning the TOML language, see `toml-lang/toml <https://github.com/toml-lang/toml>`_.
 
-qtoml currently supports TOML v0.4.0. Features above that are not supported.
+qtoml currently supports TOML v0.5.0.
 
 Usage
 =====

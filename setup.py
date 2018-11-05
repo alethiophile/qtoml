@@ -7,7 +7,7 @@ with open('README.rst') as rm:
 
 setup(
     name='qtoml',
-    version='0.2.0',
+    version='0.2.1',
     author="alethiophile",
     author_email="tomdicksonhunt@gmail.com",
     description="New TOML encoder/decoder",
