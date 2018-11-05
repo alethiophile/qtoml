@@ -108,13 +108,11 @@ def parse_string(p, delim='"', allow_escapes=True, allow_newlines=False,
     p.advance(len(delim))
     sv = ""
     while True:
-        # endquote = string.find(delim, endquote + len(delim))
         sv += p.advance_until(delim)
         if p.at_end() and not sv.endswith(delim):  # closing quote not found
             raise TOMLDecodeError("end of file inside string", p)
         # get all backslashes before the quote
         if allow_escapes:
-            # a, b = class_rpartition("\\", string[:endquote])
             a, b = class_rpartition("\\", sv[:-len(delim)])
             if len(b) % 2 == 0:  # if backslash count is even, it's not escaped
                 break
@@ -125,10 +123,15 @@ def parse_string(p, delim='"', allow_escapes=True, allow_newlines=False,
     sv = sv[:-len(delim)]
     if "\n" in sv and not allow_newlines:
         raise TOMLDecodeError("newline in basic string", p)
+    control_chars = [chr(i) for i in list(range(0, 9)) + list(range(11, 32)) +
+                     [127]]
+    if any(i in control_chars for i in sv):
+        raise TOMLDecodeError("unescaped control character in string", p)
     if allow_newlines and sv.startswith("\n"):
         sv = sv[1:]
     bs = 0
     last_subst = ''
+    ws_re = re.compile(r"[ \t]*\n")
     while allow_escapes:
         bs = sv.find("\\", bs + len(last_subst))
         if bs == -1:
@@ -142,7 +145,13 @@ def parse_string(p, delim='"', allow_escapes=True, allow_newlines=False,
             if len(hexval) != 4:
                 raise TOMLDecodeError("hexval cutoff in \\u", p)
             try:
-                subst = chr(int(hexval, base=16))
+                iv = int(hexval, base=16)
+                # spec requires we error on Unicode surrogates
+                if iv > 0xd800 and iv <= 0xdfff:
+                    raise TOMLDecodeError(
+                        f"non-scalar unicode escape '\\u{hexval}'", p
+                    )
+                subst = chr(iv)
             except ValueError as e:
                 raise TOMLDecodeError(f"bad hex escape '\\u{hexval}'", p) from e
             escape_end += 4
@@ -151,11 +160,16 @@ def parse_string(p, delim='"', allow_escapes=True, allow_newlines=False,
             if len(hexval) != 8:
                 raise TOMLDecodeError("hexval cutoff in \\U", p)
             try:
-                subst = chr(int(hexval, base=16))
-            except ValueError as e:
+                iv = int(hexval, base=16)
+                if iv > 0xd800 and iv <= 0xdfff:
+                    raise TOMLDecodeError(
+                        f"non-scalar unicode escape '\\u{hexval}'", p
+                    )
+                subst = chr(iv)
+            except (ValueError, OverflowError) as e:
                 raise TOMLDecodeError(f"bad hex escape '\\U{hexval}'", p) from e
             escape_end += 8
-        elif whitespace_escape and ev == '\n':
+        elif whitespace_escape and ws_re.match(sv, pos=bs + 1):
             a, b = class_partition(" \t\n", sv[bs + 2:])
             escape_end += len(a)
             subst = ''
@@ -165,23 +179,51 @@ def parse_string(p, delim='"', allow_escapes=True, allow_newlines=False,
         last_subst = subst
     return sv, p  # .advance(adv_len)
 
-num_re = re.compile(r"[+-]?([0-9]|[1-9][0-9_]*[0-9])" +
-                    r"(?P<frac>\.([0-9]|[0-9][0-9_]*[0-9]))?" +
-                    r"(?P<exp>[eE][+-]?([0-9]|[1-9][0-9_]*[0-9]))?" +
-                    r"(?=([\s,\]]|$))")
-def parse_num(p):
-    string = p.advance_through_class("+-0123456789_.eE")
-    o = num_re.match(string)
+float_re = re.compile(r"[+-]?(inf|nan|(([0-9]|[1-9][0-9_]*[0-9])" +
+                      r"(?P<frac>\.([0-9]|[0-9][0-9_]*[0-9]))?" +
+                      r"(?P<exp>[eE][+-]?([0-9]|[1-9][0-9_]*[0-9]))?))" +
+                      r"(?=([\s,\]}]|$))")
+def parse_float(p):
+    o = float_re.match(p._string, pos=p._index)
     if o is None:
-        raise TOMLDecodeError("tried to parse_num non-num", p)
+        raise TOMLDecodeError("tried to parse_float non-float", p)
     mv = o.group(0)
+    if (not (o.group('frac') or o.group('exp')) and
+        not ('inf' in mv or 'nan' in mv)):
+        raise TOMLDecodeError("tried to parse_float, but should be int", p)
+    p.advance(len(mv))
     if '__' in mv:
         raise TOMLDecodeError("double underscore in number", p)
     sv = mv.replace('_', '')
-    if o.group('frac') or o.group('exp'):
-        rv = float(sv)
-    else:
-        rv = int(sv)
+    rv = float(sv)
+    return rv, p
+
+int_re = re.compile(r"((0[xob][0-9a-fA-F_]+)|" +
+                    r"([+-]?([0-9]|[1-9][0-9_]*[0-9])))" +
+                    r"(?=[\s,\]}]|$)")
+def parse_int(p):
+    o = int_re.match(p._string, pos=p._index)
+    if o is None:
+        raise TOMLDecodeError("tried to parse_int non-int", p)
+    mv = o.group(0)
+    p.advance(len(mv))
+    if '__' in mv or re.match('0[xob]_', mv) or mv.endswith('_'):
+        raise TOMLDecodeError(f"invalid underscores in int '{mv}'", p)
+    sv = mv.replace('_', '')
+    base = 10
+    if sv.startswith('0x'):
+        base = 16
+        sv = sv[2:]
+    elif sv.startswith('0b'):
+        base = 2
+        sv = sv[2:]
+    elif sv.startswith('0o'):
+        base = 8
+        sv = sv[2:]
+    try:
+        rv = int(sv, base=base)
+    except ValueError as e:
+        raise TOMLDecodeError(f"invalid base {base} integer '{mv}'", p) from e
     return rv, p
 
 def parse_array(p):
@@ -214,33 +256,63 @@ def parse_array(p):
             raise TOMLDecodeError(f"bad next char {p.get(0)} in array", p)
     return rv, p
 
-dt_re = re.compile(r"(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d)T" +
-                   r"(?P<hr>\d\d):(?P<min>\d\d):(?P<sec>\d\d)" +
-                   r"(\.(?P<msec>\d{6}))?(?P<tz>(Z|[+-]\d\d:\d\d))")
-def parse_dt_string(s):
-    o = dt_re.match(s)
-    if o is None:
-        return None
-    year, month, day, hour, minute, sec = [
-        int(o.group(i)) for i in ['year', 'month', 'day', 'hr', 'min', 'sec']]
-    msec = int(o.group('msec')) if o.group('msec') else 0
+
+date_res = r"(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d)"
+time_res = r"(?P<hr>\d\d):(?P<min>\d\d):(?P<sec>\d\d)(\.(?P<msec>\d{3,}))?"
+
+date_re = re.compile(date_res)
+time_re = re.compile(time_res)
+
+datetime_re = re.compile(date_res + r"[T ]" + time_res +
+                         r"(?P<tz>(Z|[+-]\d\d:\d\d))?")
+
+def date_from_string(o):
+    year, month, day = [int(o.group(i)) for i in ['year', 'month', 'day']]
+    rv = datetime.date(year, month, day)
+    return rv
+
+def time_from_string(o):
+    hour, minute, sec = [int(o.group(i)) for i in ['hr', 'min', 'sec']]
+    msec_str = (o.group('msec') if o.group('msec') else "0")[:6]
+    msec = int(msec_str) * 10 ** (6 - len(msec_str))
+    rv = datetime.time(hour, minute, sec, msec)
+    return rv
+
+def datetime_from_string(o):
+    date = date_from_string(o)
+    time = time_from_string(o)
     tz = o.group('tz')
     if tz == 'Z':
         tzi = datetime.timezone.utc
-    else:
+    elif tz:
         td = datetime.timedelta(hours=int(tz[1:3]), minutes=int(tz[4:6]))
         if tz[0] == '-':
             td = -td
         tzi = datetime.timezone(td)
-    rv = datetime.datetime(year, month, day, hour, minute, sec, msec, tzi)
+    else:
+        tzi = None
+    rv = datetime.datetime(date.year, date.month, date.day, time.hour,
+                           time.minute, time.second, time.microsecond, tzi)
     return rv
 
 def parse_datetime(p):
-    string = p.advance_through_class("0123456789-T:+Z")
-    rv = parse_dt_string(string)
-    if rv is None:
-        raise TOMLDecodeError("tried to parse_datetime non-dt", p)
-    return rv, p
+    o = datetime_re.match(p._string, pos=p._index)
+    if o:
+        p.advance(o.end() - o.pos)
+        return datetime_from_string(o), p
+    o = time_re.match(p._string, pos=p._index)
+    if o:
+        p.advance(o.end() - o.pos)
+        return time_from_string(o), p
+    o = date_re.match(p._string, pos=p._index)
+    if o:
+        p.advance(o.end() - o.pos)
+        return date_from_string(o), p
+    raise TOMLDecodeError("failed to parse datetime (shouldn't happen)", p)
+
+def is_date_or_time(p):
+    return (date_re.match(p._string, pos=p._index) or
+            time_re.match(p._string, pos=p._index))
 
 def parse_inline_table(p):
     if not p.at_string('{'):
@@ -252,17 +324,19 @@ def parse_inline_table(p):
         if p.at_string('}'):
             p.advance(1)
             break
-        k, p = parse_key(p)
+        kl, p = parse_keylist(p)
         p.advance_through_class(" \t")
         if not p.at_string('='):
-            raise TOMLDecodeError(f"no = after key {k} in inline", p)
+            raise TOMLDecodeError(f"no = after key {kl} in inline", p)
         p.advance(1)
         p.advance_through_class(" \t")
         v, p = parse_value(p)
         p.advance_through_class(" \t")
-        if k in rv:
+        target = proc_kl(rv, kl[:-1], False, p, set())
+        k = kl[-1]
+        if k in target:
             raise TOMLDecodeError(f"duplicated key '{k}' in inline", p)
-        rv[k] = v
+        target[k] = v
         if p.at_string(','):
             p.advance(1)
             p.advance_through_class(" \t")
@@ -307,9 +381,11 @@ def parse_value(p):
     elif p.at_string('false'):
         val = False
         p.advance(5)
-    elif num_re.match(p.get(p.len())):
-        val, p = parse_num(p)
-    elif dt_re.match(p.get(25)):
+    elif int_re.match(p._string, pos=p._index):
+        val, p = parse_int(p)
+    elif float_re.match(p._string, pos=p._index):
+        val, p = parse_float(p)
+    elif is_date_or_time(p):
         val, p = parse_datetime(p)
     else:
         raise TOMLDecodeError("can't parse type", p)
@@ -327,17 +403,30 @@ def parse_key(p):
         raise TOMLDecodeError(f"'{p.get(1)}' cannot begin key", p)
     return k, p
 
+def parse_keylist(p):
+    rv = []
+    while True:
+        k, p = parse_key(p)
+        p.advance_through_class(" \t")
+        rv.append(k)
+        if p.at_string('.'):
+            p.advance(1)
+            p.advance_through_class(" \t")
+        else:
+            break
+    return rv, p
+
 def parse_pair(p):
     if p.at_end():
         return (None, None), p
-    k, p = parse_key(p)
+    kl, p = parse_keylist(p)
     p.advance_through_class(" \t")
     if not p.at_string('='):
-        raise TOMLDecodeError(f"no = following key '\"{k}\"'", p)
+        raise TOMLDecodeError(f"no = following key '\"{kl}\"'", p)
     p.advance(1)
     p.advance_through_class(" \t")
     v, p = parse_value(p)
-    return (k, v), p
+    return (kl, v), p
 
 def parse_tablespec(p):
     if not p.at_string('['):
@@ -348,29 +437,22 @@ def parse_tablespec(p):
         p.advance(1)
         tarray = True
     p.advance_through_class(" \t")
-    rv = []
-    while True:
-        k, p = parse_key(p)
-        p.advance_through_class(" \t")
-        rv.append(k)
-        if p.at_string('.'):
-            p.advance(1)
-            p.advance_through_class(" \t")
-        elif p.at_string(']'):
-            p.advance(1)
-            break
-        else:
-            raise TOMLDecodeError(f"Bad char {repr(p.get(1))} in tablespec",
-                                  p)
+    rv, p = parse_keylist(p)
+    if not p.at_string(']'):
+        raise TOMLDecodeError(f"Bad char {repr(p.get(1))} in tablespec",
+                              p)
+    p.advance(1)
     if tarray:
         if not p.at_string(']'):
             raise TOMLDecodeError(f"Didn't close tarray properly", p)
         p.advance(1)
     return rv, p
 
-def proc_kl(rv, kl, tarray, p):
+def proc_kl(rv, kl, tarray, p, toplevel_arrays):
     """Handle a table spec keylist, modifying rv in place; returns target"""
     c = rv
+    if len(kl) == 0:
+        return c
     # all entries except last must be dicts
     for i in kl[:-1]:
         if i in c:
@@ -378,6 +460,9 @@ def proc_kl(rv, kl, tarray, p):
                 raise TOMLDecodeError(f"repeated key in keylist {repr(kl)}", p)
         else:
             c[i] = {}
+        if type(c[i]) == list and id(c[i]) in toplevel_arrays:
+            raise TOMLDecodeError("appended to statically defined " +
+                                  f"array '{i}'", p)
         c = c[i] if type(c[i]) == dict else c[i][-1]
     fk = kl[-1]
     if tarray:
@@ -386,6 +471,9 @@ def proc_kl(rv, kl, tarray, p):
                 raise TOMLDecodeError(f"repeated key in keylist {repr(kl)}", p)
         else:
             c[fk] = []
+        if id(c[fk]) in toplevel_arrays:
+            raise TOMLDecodeError("appended to statically defined " +
+                                  f"array '{fk}'", p)
         c[fk].append({})
         return c[fk][-1]
     else:
@@ -406,6 +494,7 @@ def loads(string):
     # this tracks tables we've already seen just so we can error out on
     # duplicates as spec requires
     toplevel_targets = set()
+    toplevel_arrays = set()
     while not p.at_end():
         n2, p = parse_throwaway(p)
         n += n2
@@ -417,15 +506,20 @@ def loads(string):
         if p.at_string('['):
             tarray = p.get(2) == '[['
             kl, p = parse_tablespec(p)
-            cur_target = proc_kl(rv, kl, tarray, p)
+            cur_target = proc_kl(rv, kl, tarray, p, toplevel_arrays)
             if id(cur_target) in toplevel_targets:
                 raise TOMLDecodeError(f"duplicated table {kl}", p)
             toplevel_targets.add(id(cur_target))
         else:
-            (k, v), p = parse_pair(p)
-            if k is not None:
-                if k in cur_target:
+            (kl, v), p = parse_pair(p)
+            if kl is not None:
+                if type(v) == list:
+                    toplevel_arrays.add(id(v))
+                    print("ta is", toplevel_arrays)
+                target = proc_kl(cur_target, kl[:-1], False, p, set())
+                k = kl[-1]
+                if k in target:
                     raise TOMLDecodeError(f"Key '{k}' is repeated", p)
-                cur_target[k] = v
+                target[k] = v
         n, p = parse_throwaway(p)
     return rv

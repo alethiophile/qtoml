@@ -18,6 +18,12 @@ setup(
     url="https://github.com/alethiophile/qtoml",
     install_requires=['click'],
     python_requires='~=3.6',
+    entry_points={
+        'console_scripts': [
+            'qtoml_testencode = qtoml.__main__:encode',
+            'qtoml_testdecode = qtoml.__main__:decode',
+        ],
+    },
     classifiers=(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",

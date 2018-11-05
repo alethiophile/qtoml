@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-from .decoder import load, parse_dt_string
+from .decoder import load
 from .encoder import dump
+import dateutil.parser
 
 import click, json, datetime
 
@@ -31,16 +32,29 @@ def type_tag(value):
     elif isinstance(value, float):
         return {'type': 'float', 'value': repr(value)}
     elif isinstance(value, datetime.datetime):
-        return {'type': 'datetime', 'value': value.isoformat()
+        tn = 'datetime' if value.tzinfo is not None else 'datetime-local'
+        return {'type': tn, 'value': value.isoformat()
                 .replace('+00:00', 'Z')}
+    elif isinstance(value, datetime.date):
+        return {'type': 'date', 'value': value.isoformat()}
+    elif isinstance(value, datetime.time):
+        return {'type': 'time', 'value': value.isoformat()}
     assert False, 'Unknown type: %s' % type(value)
 
 def to_bool(s):
     assert s in ['true', 'false']
     return s == 'true'
 
+def date_from_string(s):
+    return dateutil.parser.parse(s).date()
+
+def time_from_string(s):
+    return dateutil.parser.parse(s).time()
+
 stypes = { 'string': str, 'bool': to_bool, 'integer': int, 'float': float,
-           'datetime': parse_dt_string }
+           'datetime': dateutil.parser.parse,
+           'datetime-local': dateutil.parser.parse, 'date': date_from_string,
+           'time': time_from_string }
 def untag(value):
     if isinstance(value, list):
         return [untag(i) for i in value]

@@ -42,10 +42,12 @@ class TOMLEncoder:
         self.encode_none = encode_none
         self.st = { str: self.dump_str, bool: self.dump_bool,
                     int: self.dump_int, float: self.dump_float,
-                    datetime.datetime: self.dump_datetime }
+                    datetime.datetime: self.dump_datetime,
+                    datetime.date: self.dump_date,
+                    datetime.time: self.dump_time }
 
     def is_scalar(self, v):
-        if type(v) in [str, bool, int, float, datetime.datetime]:
+        if type(v) in self.st.keys():
             return True
         if type(v) == list and (len(v) == 0 or self.is_scalar(v[0])):
             return True
@@ -102,6 +104,12 @@ class TOMLEncoder:
         if rv.endswith("+00:00"):
             rv = rv[:-6] + "Z"
         return rv
+
+    def dump_date(self, d):
+        return d.isoformat()
+
+    def dump_time(self, d):
+        return d.isoformat()
 
     def dump_array(self, a):
         rv = "["
