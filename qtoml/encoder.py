@@ -49,7 +49,7 @@ class TOMLEncoder:
     def is_scalar(self, v):
         if type(v) in self.st.keys():
             return True
-        if type(v) == list and (len(v) == 0 or self.is_scalar(v[0])):
+        if type(v) in [list, tuple] and (len(v) == 0 or self.is_scalar(v[0])):
             return True
         if v is None and self.encode_none is None:
             raise TOMLEncodeError("TOML cannot encode None")
@@ -142,7 +142,7 @@ class TOMLEncoder:
     def dump_value(self, v):
         if type(v) in self.st:
             return self.st[type(v)](v)
-        elif type(v) == list:
+        elif type(v) in [list, tuple]:
             return self.dump_array(v)
         elif v is None and self.encode_none is not None:
             return self.dump_value(self.encode_none)
@@ -179,6 +179,8 @@ class TOMLEncoder:
         all_keys = set(obj.keys())
         if dumped_keys != all_keys:
             not_dumped = all_keys.difference(dumped_keys)
+            k1 = not_dumped.pop()
+            kl = obj_name + [k1]
             raise TOMLEncodeError("got object of non-encodable type on key "
-                                  f"'{not_dumped.pop()}'")
+                                  f"'{'.'.join(kl)}'")
         return rv
