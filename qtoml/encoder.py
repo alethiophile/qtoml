@@ -181,6 +181,7 @@ class TOMLEncoder:
                     if len(rv) > 0:
                         rv += "\n"
                     rv += self.dump_sections(ent, obj_name + [k], True)
+                rv += "\n"
                 dumped_keys.add(k)
         all_keys = set(obj.keys())
         if dumped_keys != all_keys:
