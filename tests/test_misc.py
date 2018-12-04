@@ -4,6 +4,7 @@
 
 import pytest
 import qtoml
+from collections import OrderedDict
 
 def test_encode_none():
     value = { 'a': None }
@@ -20,3 +21,13 @@ def test_encode_unencodable():
     value = { 'a': func }
     with pytest.raises(qtoml.encoder.TOMLEncodeError):
         qtoml.dumps(value)
+
+def test_encode_subclass():
+    value = OrderedDict(a=1, b=2, c=3, d=4, e=5)
+    toml_val = qtoml.dumps(value)
+    # ensure order is preserved
+    assert toml_val == 'a = 1\nb = 2\nc = 3\nd = 4\ne = 5\n'
+    cycle = qtoml.loads(toml_val)
+    # cycle value is a plain dictionary, so this comparison is
+    # order-insensitive
+    assert value == cycle

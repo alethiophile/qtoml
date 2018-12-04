@@ -46,10 +46,16 @@ class TOMLEncoder:
                     datetime.date: self.dump_date,
                     datetime.time: self.dump_time }
 
+    def _st_lookup(self, v):
+        for i in self.st:
+            if isinstance(v, i):
+                return self.st[i]
+
     def is_scalar(self, v):
-        if type(v) in self.st.keys():
+        if isinstance(v, tuple(self.st.keys())):
             return True
-        if type(v) in [list, tuple] and (len(v) == 0 or self.is_scalar(v[0])):
+        if (isinstance(v, (list, tuple)) and
+            (len(v) == 0 or self.is_scalar(v[0]))):
             return True
         if v is None and self.encode_none is None:
             raise TOMLEncodeError("TOML cannot encode None")
@@ -140,9 +146,9 @@ class TOMLEncoder:
             return self.dump_str(k, multiline_allowed=False)
 
     def dump_value(self, v):
-        if type(v) in self.st:
-            return self.st[type(v)](v)
-        elif type(v) in [list, tuple]:
+        if isinstance(v, tuple(self.st.keys())):
+            return self._st_lookup(v)(v)
+        elif isinstance(v, (list, tuple)):
             return self.dump_array(v)
         elif v is None and self.encode_none is not None:
             return self.dump_value(self.encode_none)
@@ -164,13 +170,13 @@ class TOMLEncoder:
                 rv += f"{self.dump_key(k)} = {self.dump_value(v)}\n"
                 dumped_keys.add(k)
         for k, v in obj.items():
-            if type(v) == dict:
+            if isinstance(v, dict):
                 if len(rv) > 0:
                     rv += "\n"
                 rv += self.dump_sections(v, obj_name + [k], False)
                 dumped_keys.add(k)
         for k, v in obj.items():
-            if type(v) == list and not self.is_scalar(v):
+            if isinstance(v, list) and not self.is_scalar(v):
                 for ent in v:
                     if len(rv) > 0:
                         rv += "\n"
