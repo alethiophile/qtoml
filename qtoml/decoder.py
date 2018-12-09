@@ -163,7 +163,7 @@ def parse_string(p, delim='"', allow_escapes=True, allow_newlines=False,
                 iv = int(hexval, base=16)
                 if iv > 0xd800 and iv <= 0xdfff:
                     raise TOMLDecodeError(
-                        f"non-scalar unicode escape '\\u{hexval}'", p
+                        f"non-scalar unicode escape '\\U{hexval}'", p
                     )
                 subst = chr(iv)
             except (ValueError, OverflowError) as e:
@@ -515,7 +515,6 @@ def loads(string):
             if kl is not None:
                 if type(v) == list:
                     toplevel_arrays.add(id(v))
-                    print("ta is", toplevel_arrays)
                 target = proc_kl(cur_target, kl[:-1], False, p, set())
                 k = kl[-1]
                 if k in target:
