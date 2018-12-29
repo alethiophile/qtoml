@@ -4,9 +4,7 @@ import datetime
 from .decoder import key_chars
 
 from typing import Dict, Any, IO, Union, Optional, Callable, Collection, List
-
-class TOMLEncodeError(Exception):
-    pass
+from .common import TOMLEncodeError
 
 def dump(obj: Dict[str, Any], fp: IO[str], encode_none:
          Union[int, str, None] = None) -> None:

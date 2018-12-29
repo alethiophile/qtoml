@@ -29,6 +29,7 @@ mypy = "^0.761"
 [tool.poetry.scripts]
 qtoml_testencode = "qtoml.__main__:encode"
 qtoml_testdecode = "qtoml.__main__:decode"
+tomldict = "qtoml.tomldict:tomldict_test"
 
 [build-system]
 requires = ["poetry>=0.12"]
