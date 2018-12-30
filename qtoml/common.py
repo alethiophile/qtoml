@@ -12,9 +12,13 @@ class ParseState:
         self._index = 0
         self.line = line
         self.col = col
+        self.start_inds = []
 
     def at_string(self, s: str) -> bool:
         return self._string[self._index:self._index + len(s)] == s
+
+    def at_re(self, re):
+        return re.match(self._string, pos=self._index)
 
     def at_end(self) -> bool:
         return self._index >= len(self._string)
@@ -66,6 +70,16 @@ class ParseState:
         self._index -= n
         ls = self._string.rfind('\n', 0, self._index) + 1
         self.col = self._index - ls
+
+    def capture_string(self):
+        self.start_inds.append(self._index)
+
+    def string_val(self):
+        if len(self.start_inds) == 0:
+            raise RuntimeError("tried string_val without captured index")
+        i = self.start_inds.pop()
+        rv = self._string[i:self._index]
+        return rv
 
     def __repr__(self) -> str:
         return ("ParseState({}, line={}, col={})".

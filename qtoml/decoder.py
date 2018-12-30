@@ -3,7 +3,7 @@
 import re, datetime
 from .common import ParseState, TOMLDecodeError
 
-from typing import (Container, Tuple, Dict, List, Any, Match, Union, Optional,
+from typing import (Tuple, Dict, List, Any, Match, Union, Optional,
                     Set, IO)
 
 def load(fo: IO[str]) -> Dict[str, Any]:
@@ -51,6 +51,7 @@ def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
     if not p.at_string(delim):
         raise TOMLDecodeError(f"string doesn't begin with delimiter '{delim}'",
                               p)
+    p.capture_string()
     p.advance(len(delim))
     sv = ""
     while True:
@@ -130,13 +131,15 @@ def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
             raise TOMLDecodeError(f"\\{ev} not a valid escape", p)
         sv = sv[:bs] + subst + sv[escape_end:]
         last_subst = subst
-    return sv, p  # .advance(adv_len)
+    ss = p.string_val()
+    return sv, ss  # .advance(adv_len)
 
 float_re = re.compile(r"[+-]?(inf|nan|(([0-9]|[1-9][0-9_]*[0-9])" +
                       r"(?P<frac>\.([0-9]|[0-9][0-9_]*[0-9]))?" +
                       r"(?P<exp>[eE][+-]?([0-9]|[0-9][0-9_]*[0-9]))?))" +
                       r"(?=([\s,\]}]|$))")
 def parse_float(p: ParseState) -> Tuple[float, ParseState]:
+    p.capture_string()
     o = float_re.match(p._string, pos=p._index)
     if o is None:
         raise TOMLDecodeError("tried to parse_float non-float", p)
@@ -149,12 +152,14 @@ def parse_float(p: ParseState) -> Tuple[float, ParseState]:
         raise TOMLDecodeError("double underscore in number", p)
     sv = mv.replace('_', '')
     rv = float(sv)
-    return rv, p
+    s = p.string_val()
+    return rv, s
 
 int_re = re.compile(r"((0[xob][0-9a-fA-F_]+)|" +
                     r"([+-]?([0-9]|[1-9][0-9_]*[0-9])))" +
                     r"(?=[\s,\]}]|$)")
 def parse_int(p: ParseState) -> Tuple[int, ParseState]:
+    p.capture_string()
     o = int_re.match(p._string, pos=p._index)
     if o is None:
         raise TOMLDecodeError("tried to parse_int non-int", p)
@@ -177,7 +182,8 @@ def parse_int(p: ParseState) -> Tuple[int, ParseState]:
         rv = int(sv, base=base)
     except ValueError as e:
         raise TOMLDecodeError(f"invalid base {base} integer '{mv}'", p) from e
-    return rv, p
+    s = p.string_val()
+    return rv, s
 
 def parse_array(p: ParseState) -> Tuple[List[Any], ParseState]:
     rv = []
@@ -247,18 +253,19 @@ def datetime_from_string(o: Match) -> datetime.datetime:
 def parse_datetime(p: ParseState) -> Tuple[Union[datetime.date, datetime.time,
                                                  datetime.datetime],
                                            ParseState]:
+    p.capture_string()
     o = datetime_re.match(p._string, pos=p._index)
     if o:
         p.advance(o.end() - o.pos)
-        return datetime_from_string(o), p
+        return datetime_from_string(o), p.string_val()
     o = time_re.match(p._string, pos=p._index)
     if o:
         p.advance(o.end() - o.pos)
-        return time_from_string(o), p
+        return time_from_string(o), p.string_val()
     o = date_re.match(p._string, pos=p._index)
     if o:
         p.advance(o.end() - o.pos)
-        return date_from_string(o), p
+        return date_from_string(o), p.string_val()
     raise TOMLDecodeError("failed to parse datetime (shouldn't happen)", p)
 
 def is_date_or_time(p: ParseState) -> bool:
@@ -305,25 +312,25 @@ def parse_dispatch_string(p: ParseState, multiline_allowed:
     if p.at_string('"""'):
         if not multiline_allowed:
             raise TOMLDecodeError("multiline string where not allowed", p)
-        val, p = parse_string(p, delim='"""', allow_escapes=True,
+        val, s = parse_string(p, delim='"""', allow_escapes=True,
                               allow_newlines=True, whitespace_escape=True)
     elif p.at_string('"'):
-        val, p = parse_string(p, delim='"', allow_escapes=True,
+        val, s = parse_string(p, delim='"', allow_escapes=True,
                               allow_newlines=False, whitespace_escape=False)
     elif p.at_string("'''"):
         if not multiline_allowed:
             raise TOMLDecodeError("multiline string where not allowed", p)
-        val, p = parse_string(p, delim="'''", allow_escapes=False,
+        val, s = parse_string(p, delim="'''", allow_escapes=False,
                               allow_newlines=True, whitespace_escape=False)
     elif p.at_string("'"):
-        val, p = parse_string(p, delim="'", allow_escapes=False,
+        val, s = parse_string(p, delim="'", allow_escapes=False,
                               allow_newlines=False, whitespace_escape=False)
-    return val, p
+    return val, s
 
 def parse_value(p: ParseState) -> Tuple[Any, ParseState]:
     val: Any
     if p.get(1) in ["'", '"']:
-        val, p = parse_dispatch_string(p)
+        val, _ = parse_dispatch_string(p)
     elif p.at_string('['):
         val, p = parse_array(p)
     elif p.at_string('{'):
@@ -335,11 +342,11 @@ def parse_value(p: ParseState) -> Tuple[Any, ParseState]:
         val = False
         p.advance(5)
     elif int_re.match(p._string, pos=p._index):
-        val, p = parse_int(p)
+        val, _ = parse_int(p)
     elif float_re.match(p._string, pos=p._index):
-        val, p = parse_float(p)
+        val, _ = parse_float(p)
     elif is_date_or_time(p):
-        val, p = parse_datetime(p)
+        val, _ = parse_datetime(p)
     else:
         raise TOMLDecodeError("can't parse type", p)
     return val, p
@@ -347,19 +354,21 @@ def parse_value(p: ParseState) -> Tuple[Any, ParseState]:
 # characters allowed in unquoted keys
 key_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 def parse_key(p: ParseState) -> Tuple[str, ParseState]:
+    p.capture_string()
     ic = p.get(1)
     if ic in ['"', "'"]:
-        k, p = parse_dispatch_string(p, multiline_allowed=False)
+        k, _ = parse_dispatch_string(p, multiline_allowed=False)
     elif ic in key_chars:
         k = p.advance_through_class(key_chars)
     else:
         raise TOMLDecodeError(f"'{p.get(1)}' cannot begin key", p)
-    return k, p
+    s = p.string_val()
+    return k, s
 
 def parse_keylist(p: ParseState) -> Tuple[List[str], ParseState]:
     rv: List[str] = []
     while True:
-        k, p = parse_key(p)
+        k, _ = parse_key(p)
         p.advance_through_class(" \t")
         rv.append(k)
         if p.at_string('.'):
@@ -369,7 +378,8 @@ def parse_keylist(p: ParseState) -> Tuple[List[str], ParseState]:
             break
     return rv, p
 
-def parse_pair(p: ParseState) -> Tuple[Tuple[Optional[List[str]], Any], ParseState]:
+def parse_pair(p: ParseState) -> Tuple[Tuple[Optional[List[str]], Any],
+                                       ParseState]:
     if p.at_end():
         return (None, None), p
     kl, p = parse_keylist(p)
