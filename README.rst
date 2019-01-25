@@ -12,6 +12,13 @@ qtoml currently supports TOML v0.5.0.
 Usage
 =====
 
+qtoml is available on `PyPI <https://pypi.org/project/qtoml/>`_. You can install
+it using pip:
+
+.. code:: bash
+
+  $ pip install qtoml
+
 qtoml supports the standard ``load``/``loads``/``dump``/``dumps`` API common to
 most similar modules. Usage:
 
@@ -32,13 +39,31 @@ most similar modules. Usage:
   >>> outfile = open('new_filename.toml', 'w')
   >>> qtoml.dump(parsed_structure, outfile)
 
-Testing
+Development/testing
 =======
 
-qtoml is tested against the `alethiophile/toml-test <https://github.com/alethiophile/toml-test>`_ test suite, forked from
-uiri's fork of the original by BurntSushi. To run the tests, check out the code
-including submodules, install pytest, and run ``pytest`` under the ``tests``
-subdirectory.
+qtoml uses the `poetry <https://github.com/sdispater/poetry>`_ tool for project
+management. To check out the project for development, run:
+
+.. code:: bash
+
+  $ git clone --recursive-submodules https://github.com/alethiophile/qtoml
+  $ cd qtoml
+  $ poetry install
+
+This assumes poetry is already installed. The package and dependencies will be
+installed in the currently active virtualenv if there is one, or a
+project-specific new one created if not.
+
+qtoml is tested against the `alethiophile/toml-test
+<https://github.com/alethiophile/toml-test>`_ test suite, forked from uiri's
+fork of the original by BurntSushi. To run the tests, after checking out the
+project as shown above, enter the ``tests`` directory and run:
+
+.. code:: bash
+
+  $ pytest              # if you already had a virtualenv active
+  $ poetry run pytest   # if you didn't
 
 License
 =======
