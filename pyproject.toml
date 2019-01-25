@@ -21,6 +21,7 @@ click = {version = "^7.0",optional = true}
 python-dateutil = "^2.7"
 pytest = "^4.1"
 hypothesis = "^4.4"
+pytz = "^2018.9"
 
 [tool.poetry.scripts]
 qtoml_testencode = "qtoml.__main__:encode"
