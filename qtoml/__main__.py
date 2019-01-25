@@ -20,7 +20,7 @@ def type_tag(value):
             a[0]["value"]
         except KeyError:
             return a
-        except IndexError:
+        except (IndexError, TypeError):
             pass
         return {'type': 'array', 'value': a}
     elif isinstance(value, str):
