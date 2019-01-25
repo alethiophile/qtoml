@@ -39,6 +39,25 @@ most similar modules. Usage:
   >>> outfile = open('new_filename.toml', 'w')
   >>> qtoml.dump(parsed_structure, outfile)
 
+TOML supports a fairly complete subset of the Python data model, but notably
+does not include a null or ``None`` value. If you have a large dictionary from
+somewhere else including ``None`` values, it can occasionally be useful to
+substitute them on encode:
+
+.. code:: pycon
+
+  >>> print(qtoml.dumps({ 'none': None }))
+  qtoml.encoder.TOMLEncodeError: TOML cannot encode None
+  >>> print(qtoml.dumps({ 'none': None }, encode_none='None'))
+  none = 'None'
+
+The ``encode_none`` value must be a replacement encodable by TOML, such as zero
+or a string.
+
+This breaks reversibility of the encoding, by rendering ``None`` values
+indistinguishable from literal occurrences of whatever sentinel you chose. Thus,
+it should not be used when exact representations are critical.
+
 Development/testing
 =======
 
