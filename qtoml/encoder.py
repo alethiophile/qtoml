@@ -51,12 +51,18 @@ class TOMLEncoder:
             if isinstance(v, i):
                 return self.st[i]
 
-    def is_scalar(self, v):
+    def is_scalar(self, v, can_tarray=True):
         if isinstance(v, tuple(self.st.keys())):
             return True
-        if (isinstance(v, (list, tuple)) and
-            (len(v) == 0 or self.is_scalar(v[0]))):
-            return True
+        if isinstance(v, (list, tuple)):
+            if len(v) == 0 or any(self.is_scalar(i, can_tarray=False)
+                                  for i in v):
+                return True
+            # if a list of dicts is nested under another list, it must be
+            # represented as a scalar (yes, this is a horribly pathological
+            # case)
+            if any(isinstance(i, dict) for i in v) and not can_tarray:
+                return True
         if v is None and self.encode_none is None:
             raise TOMLEncodeError("TOML cannot encode None")
         elif v is None:
@@ -162,6 +168,10 @@ class TOMLEncoder:
             return self._st_lookup(v)(v)
         elif isinstance(v, (list, tuple)):
             return self.dump_array(v)
+        elif isinstance(v, dict):
+            # if we get here, then is_scalar returned true and we have to do
+            # inline arrays
+            return self.dump_itable(v)
         elif v is None and self.encode_none is not None:
             return self.dump_value(self.encode_none)
         else:
