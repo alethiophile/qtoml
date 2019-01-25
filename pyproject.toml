@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "qtoml"
-version = "0.2.3"
+version = "0.2.4"
 description = "New TOML encoder/decoder"
 authors = ["alethiophile <tomdicksonhunt@gmail.com>"]
 license = "MIT"
