@@ -5,3 +5,4 @@ build
 dist
 tests/.coverage
 poetry.lock
+tests/.hypothesis
