@@ -66,9 +66,9 @@ class TOMLEncoder:
     def dump_bstr(self, s, multiline=False):
         delim = '"""' if multiline else '"'
         rv = delim
-        for i in s:
+        for n, i in enumerate(s):
             if ord(i) < 32 or i in '\\"':
-                if i == '\n' and multiline:
+                if i == '\n' and multiline and n != 0:
                     rv += i
                 elif i in self.escapes:
                     rv += self.escapes[i]
@@ -87,10 +87,15 @@ class TOMLEncoder:
         return delim + s + delim
 
     def dump_str(self, s, multiline_allowed=True):
-        multiline = "\n" in s
+        """This handles newlines at the start of the string specially, since multiline
+        strings must escape them.
+
+        """
+        multiline = "\n" in s[1:]
         if (("'" in s and not multiline) or "'''" in s or
             any(ord(i) < 32 and i != "\n" for i in s) or
-            (multiline and not multiline_allowed)):
+            (multiline and not multiline_allowed) or
+            s.startswith("\n")):
             # can't put these in raw string
             return self.dump_bstr(s, multiline and multiline_allowed)
         else:
