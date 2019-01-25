@@ -103,7 +103,14 @@ class TOMLEncoder:
         return str(i)
 
     def dump_float(self, i):
-        return str(i)
+        fv = str(i)
+        # Python by default emits two-digit exponents with leading zeroes,
+        # which violates the TOML spec.
+        if 'e' in fv:
+            f, e, exp = fv.rpartition('e')
+            exp = str(int(exp))
+            fv = f + e + exp
+        return fv
 
     def dump_datetime(self, d):
         rv = d.isoformat()
