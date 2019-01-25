@@ -4,3 +4,4 @@ qtoml.egg-info
 build
 dist
 tests/.coverage
+poetry.lock
