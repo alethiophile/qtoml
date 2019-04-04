@@ -101,7 +101,7 @@ class TOMLEncoder:
         if (("'" in s and not multiline) or "'''" in s or
             any(ord(i) < 32 and i != "\n" for i in s) or
             (multiline and not multiline_allowed) or
-            s.startswith("\n")):
+            s.startswith("\n") or s.endswith("'")):
             # can't put these in raw string
             return self.dump_bstr(s, multiline and multiline_allowed)
         else:
