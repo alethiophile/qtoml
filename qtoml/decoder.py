@@ -273,7 +273,8 @@ def parse_array(p: ParseState) -> Tuple[List[Any], ParseState]:
             p.advance(1)
             break
         else:
-            raise TOMLDecodeError(f"bad next char {p.get(0)} in array", p)
+            raise TOMLDecodeError(f"bad next char {repr(p.get(1))} in array",
+                                  p)
     return rv, p
 
 
