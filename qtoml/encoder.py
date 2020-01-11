@@ -146,13 +146,7 @@ class TOMLEncoder:
         rv = "["
         if len(a) == 0:
             return "[]"
-        at = None
         for i in a:
-            if at is not None:
-                if type(i) != at:
-                    raise TOMLEncodeError("array with mixed type")
-            else:
-                at = type(i)
             rv += self.dump_value(i)
             rv += ", "
         rv = (rv[:-2] if rv.endswith(', ') else rv)

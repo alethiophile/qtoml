@@ -254,7 +254,6 @@ def parse_int(p: ParseState) -> Tuple[int, ParseState]:
 
 def parse_array(p: ParseState) -> Tuple[List[Any], ParseState]:
     rv = []
-    atype = None
     if not p.at_string('['):
         raise TOMLDecodeError("tried to parse_array non-array", p)
     p.advance(1)
@@ -264,11 +263,6 @@ def parse_array(p: ParseState) -> Tuple[List[Any], ParseState]:
             p.advance(1)
             break
         v, p = parse_value(p)
-        if atype is not None:
-            if type(v) != atype:
-                raise TOMLDecodeError("array of mixed type", p)
-        else:
-            atype = type(v)
         rv.append(v)
         n, p = parse_throwaway(p)
         if p.at_string(','):
