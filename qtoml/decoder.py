@@ -64,6 +64,19 @@ class ParseState:
         self._index += n
         return d
 
+    def backtrack(self, n: int) -> None:
+        if self._index <= n:
+            self._index = 0
+            self.line = 1
+            self.col = 0
+            return
+        d = self._string[self._index - n:self._index]
+        lc = d.count('\n')
+        self.line -= lc
+        self._index -= n
+        ls = self._string.rfind('\n', 0, self._index) + 1
+        self.col = self._index - ls
+
     def __repr__(self) -> str:
         return ("ParseState({}, line={}, col={})".
                 format(repr(self._string), self.line, self.col))
@@ -122,6 +135,13 @@ def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
             a, b = class_rpartition("\\", sv[:-len(delim)])
             if len(b) % 2 == 0:  # if backslash count is even, it's not escaped
                 break
+            # escape only invalidates one character; if we're in a
+            # multi-character string, backtrack to try the rest of the delim
+            # (this catches cases like \"""" to end a string)
+            n_remove = len(delim) - 1
+            if n_remove > 0:
+                p.backtrack(n_remove)
+                sv = sv[:-n_remove]
         else:
             break
         if p.at_end():
