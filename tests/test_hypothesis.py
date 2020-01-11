@@ -35,3 +35,8 @@ toml_data = s.dictionaries(s.text(), toml_vals)
 @given(toml_data)
 def test_circular_encode(data):
     assert patch_floats(qtoml.loads(qtoml.dumps(data))) == patch_floats(data)
+
+@given(s.text())
+def test_string_encode(data):
+    obj = {'key': data}
+    assert qtoml.loads(qtoml.dumps(obj)) == obj
