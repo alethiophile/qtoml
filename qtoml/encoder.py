@@ -21,7 +21,7 @@ def dump(obj: Dict[str, Any], fp: IO[str], encode_none:
     might include 0, empty string, or a unique string sentinel value.
 
     """
-    fp.write(dumps(obj, **kwargs))
+    fp.write(dumps(obj, encode_none))
 
 def dumps(obj: Dict[str, Any], encode_none:
           Union[int, str, None] = None) -> str:
@@ -35,7 +35,7 @@ def dumps(obj: Dict[str, Any], encode_none:
     might include 0, empty string, or a unique string sentinel value.
 
     """
-    return TOMLEncoder(**kwargs).dump_sections(obj, [], False)
+    return TOMLEncoder(encode_none).dump_sections(obj, [], False)
 
 class TOMLEncoder:
     # spec-defined string escapes
@@ -56,6 +56,7 @@ class TOMLEncoder:
         for i in self.st:
             if isinstance(v, i):
                 return self.st[i]
+        return None
 
     def is_scalar(self, v: Any, can_tarray: bool = True) -> bool:
         if isinstance(v, tuple(self.st.keys())):
@@ -166,7 +167,11 @@ class TOMLEncoder:
 
     def dump_value(self, v: Any) -> str:
         if isinstance(v, tuple(self.st.keys())):
-            return self._st_lookup(v)(v)
+            f = self._st_lookup(v)
+            # we know this will never happen due to the check; this just
+            # satisfies mypy
+            assert f is not None
+            return f(v)
         elif isinstance(v, (list, tuple)):
             return self.dump_array(v)
         elif isinstance(v, dict):

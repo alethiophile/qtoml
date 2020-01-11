@@ -334,9 +334,9 @@ def parse_datetime(p: ParseState) -> Tuple[Union[datetime.date, datetime.time,
         return date_from_string(o), p
     raise TOMLDecodeError("failed to parse datetime (shouldn't happen)", p)
 
-def is_date_or_time(p):
-    return (date_re.match(p._string, pos=p._index) or
-            time_re.match(p._string, pos=p._index))
+def is_date_or_time(p: ParseState) -> bool:
+    return (bool(date_re.match(p._string, pos=p._index)) or
+            bool(time_re.match(p._string, pos=p._index)))
 
 def parse_inline_table(p: ParseState) -> Tuple[Dict[str, Any], ParseState]:
     if not p.at_string('{'):
