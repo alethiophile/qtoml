@@ -59,7 +59,7 @@ indistinguishable from literal occurrences of whatever sentinel you chose. Thus,
 it should not be used when exact representations are critical.
 
 Development/testing
-=======
+===================
 
 qtoml uses the `poetry <https://github.com/sdispater/poetry>`_ tool for project
 management. To check out the project for development, run:
