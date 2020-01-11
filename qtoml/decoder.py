@@ -207,7 +207,7 @@ def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
 
 float_re = re.compile(r"[+-]?(inf|nan|(([0-9]|[1-9][0-9_]*[0-9])" +
                       r"(?P<frac>\.([0-9]|[0-9][0-9_]*[0-9]))?" +
-                      r"(?P<exp>[eE][+-]?([0-9]|[1-9][0-9_]*[0-9]))?))" +
+                      r"(?P<exp>[eE][+-]?([0-9]|[0-9][0-9_]*[0-9]))?))" +
                       r"(?=([\s,\]}]|$))")
 def parse_float(p: ParseState) -> Tuple[float, ParseState]:
     o = float_re.match(p._string, pos=p._index)
