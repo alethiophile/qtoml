@@ -6,14 +6,16 @@ import dateutil.parser
 
 import click, json, datetime
 
-def type_tag(value):
+from typing import IO, Optional, Union, Dict, Any, List, Callable, cast
+
+def type_tag(value: Any) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     if isinstance(value, dict):
         d = {}
         for k, v in value.items():
             d[k] = type_tag(v)
         return d
     elif isinstance(value, list):
-        a = []
+        a: List[Any] = []
         for v in value:
             a.append(type_tag(v))
         try:
@@ -41,21 +43,24 @@ def type_tag(value):
         return {'type': 'time', 'value': value.isoformat()}
     assert False, 'Unknown type: %s' % type(value)
 
-def to_bool(s):
+def to_bool(s: str) -> bool:
     assert s in ['true', 'false']
     return s == 'true'
 
-def date_from_string(s):
+def date_from_string(s: str) -> datetime.date:
     return dateutil.parser.parse(s).date()
 
-def time_from_string(s):
+def time_from_string(s: str) -> datetime.time:
     return dateutil.parser.parse(s).time()
 
-stypes = { 'string': str, 'bool': to_bool, 'integer': int, 'float': float,
-           'datetime': dateutil.parser.parse,
-           'datetime-local': dateutil.parser.parse, 'date': date_from_string,
-           'time': time_from_string }
-def untag(value):
+stypes: Dict[str, Callable[[str], Any]] = {
+    'string': str, 'bool': to_bool, 'integer': int, 'float': float,
+    'datetime': dateutil.parser.parse,
+    'datetime-local': dateutil.parser.parse, 'date': date_from_string,
+    'time': time_from_string
+}
+def untag(value: Union[Dict[str, Any], List[Any]]) -> Union[Dict[str, Any],
+                                                            List[Any]]:
     if isinstance(value, list):
         return [untag(i) for i in value]
     elif 'type' in value and 'value' in value and len(value) == 2:
@@ -69,7 +74,7 @@ def untag(value):
         return { k: untag(v) for k, v in value.items() }
 
 @click.group()
-def main():
+def main() -> None:
     pass
 
 @main.command()
@@ -79,29 +84,34 @@ def main():
               help="Untag data for toml-test")
 @click.argument('inp', type=click.File('r'))
 @click.argument('out', type=click.File('w'))
-def encode(inp, out, encode_none, test):
+def encode(inp: IO[str], out: IO[str], encode_none: Optional[str],
+           test: bool) -> None:
     """Encode TOML from JSON. Reads from the file INP, writes to OUT; you can pass
     '-' to either to use stdin/stdout."""
-    try:
-        encode_none = int(encode_none)
-    except (ValueError, TypeError):
-        pass
+    noneval: Union[str, int, None]
+    if encode_none is None:
+        noneval = None
+    else:
+        try:
+            noneval = int(encode_none)
+        except ValueError:
+            noneval = encode_none
     val = json.load(inp)
     if test:
         val = untag(val)
-    dump(val, out, encode_none=encode_none)
+    dump(val, out, encode_none=noneval)
 
 @main.command()
 @click.option('--test/--no-test', default=False,
               help="Tag output for toml-test")
 @click.argument('inp', type=click.File('r'))
 @click.argument('out', type=click.File('w'))
-def decode(inp, out, test):
+def decode(inp: IO[str], out: IO[str], test: bool) -> None:
     """Decode TOML to JSON. Reads from the file INP, writes to OUT; you can pass
     '-' to either to use stdin/stdout."""
     idata = load(inp)
     if test:
-        idata = type_tag(idata)
+        idata = cast(Dict[str, Any], type_tag(idata))
     json.dump(idata, out, indent=2)
 
 if __name__ == '__main__':

@@ -2,7 +2,10 @@
 
 import re, datetime
 
-def load(fo):
+from typing import (Container, Tuple, Dict, List, Any, Match, Union, Optional,
+                    Set, IO)
+
+def load(fo: IO[str]) -> Dict[str, Any]:
     """Load TOML data from a file-like object fo, and return it as a dict.
 
     """
@@ -14,25 +17,25 @@ class ParseState:
     requested. Also tracks line and column for error reporting.
 
     """
-    def __init__(self, string, line=1, col=0):
+    def __init__(self, string: str, line: int = 1, col: int = 0) -> None:
         self._string = string
         self._index = 0
         self.line = line
         self.col = col
 
-    def at_string(self, s):
+    def at_string(self, s: str) -> bool:
         return self._string[self._index:self._index + len(s)] == s
 
-    def at_end(self):
+    def at_end(self) -> bool:
         return self._index >= len(self._string)
 
-    def len(self):
+    def len(self) -> int:
         return len(self._string) - self._index
 
-    def get(self, n):
+    def get(self, n: int) -> str:
         return self._string[self._index:self._index + n]
 
-    def advance_through_class(self, cls):
+    def advance_through_class(self, cls: Container[str]) -> str:
         i = self._index
         while True:
             if i < len(self._string) and self._string[i] in cls:
@@ -41,7 +44,7 @@ class ParseState:
                 break
         return self.advance(i - self._index)
 
-    def advance_until(self, s):
+    def advance_until(self, s: str) -> str:
         i = self._string.find(s, self._index)
         if i == -1:
             i = len(self._string)
@@ -49,7 +52,7 @@ class ParseState:
             i += len(s)
         return self.advance(i - self._index)
 
-    def advance(self, n):
+    def advance(self, n: int) -> str:
         d = self._string[self._index:self._index + n]
         lc = d.count('\n')
         cc = len(d.rpartition("\n")[2])
@@ -61,16 +64,16 @@ class ParseState:
         self._index += n
         return d
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return ("ParseState({}, line={}, col={})".
                 format(repr(self._string), self.line, self.col))
 
 class TOMLDecodeError(Exception):
-    def __init__(self, msg, parse, *args, **kwargs):
+    def __init__(self, msg: str, parse: ParseState) -> None:
         super().__init__("{} (line {}, column {})".
                          format(msg, parse.line, parse.col))
 
-def parse_throwaway(p):
+def parse_throwaway(p: ParseState) -> Tuple[int, ParseState]:
     s = ""
     while True:
         s += p.advance_through_class(" \t\r\n")
@@ -81,7 +84,7 @@ def parse_throwaway(p):
     lines = s.count("\n")
     return lines, p
 
-def class_partition(cls, string):
+def class_partition(cls: str, string: str) -> Tuple[str, str]:
     """Given a set of characters and a string, take the longest prefix made up of
     the characters in the set, and return a tuple of (prefix, remainder).
 
@@ -90,7 +93,7 @@ def class_partition(cls, string):
     lc = len(string) - len(ns)
     return (string[:lc], string[lc:])
 
-def class_rpartition(cls, string):
+def class_rpartition(cls: str, string: str) -> Tuple[str, str]:
     """As class_partition, but for rpartition/rstrip"""
     ns = string.rstrip(cls)
     lc = len(string) - len(ns)
@@ -98,10 +101,13 @@ def class_rpartition(cls, string):
         return (string, '')
     return (string[:-lc], string[-lc:])
 
-escape_vals = { 'b': "\b", 't': "\t", 'n': "\n", 'f': "\f", 'r': "\r",
-                '"': '"', '\\': '\\' }
-def parse_string(p, delim='"', allow_escapes=True, allow_newlines=False,
-                 whitespace_escape=False):
+escape_vals: Dict[str, str] = {
+    'b': "\b", 't': "\t", 'n': "\n", 'f': "\f", 'r': "\r",
+    '"': '"', '\\': '\\'
+}
+def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
+                 allow_newlines: bool = False,
+                 whitespace_escape: bool = False) -> Tuple[str, ParseState]:
     if not p.at_string(delim):
         raise TOMLDecodeError(f"string doesn't begin with delimiter '{delim}'",
                               p)
@@ -183,7 +189,7 @@ float_re = re.compile(r"[+-]?(inf|nan|(([0-9]|[1-9][0-9_]*[0-9])" +
                       r"(?P<frac>\.([0-9]|[0-9][0-9_]*[0-9]))?" +
                       r"(?P<exp>[eE][+-]?([0-9]|[1-9][0-9_]*[0-9]))?))" +
                       r"(?=([\s,\]}]|$))")
-def parse_float(p):
+def parse_float(p: ParseState) -> Tuple[float, ParseState]:
     o = float_re.match(p._string, pos=p._index)
     if o is None:
         raise TOMLDecodeError("tried to parse_float non-float", p)
@@ -201,7 +207,7 @@ def parse_float(p):
 int_re = re.compile(r"((0[xob][0-9a-fA-F_]+)|" +
                     r"([+-]?([0-9]|[1-9][0-9_]*[0-9])))" +
                     r"(?=[\s,\]}]|$)")
-def parse_int(p):
+def parse_int(p: ParseState) -> Tuple[int, ParseState]:
     o = int_re.match(p._string, pos=p._index)
     if o is None:
         raise TOMLDecodeError("tried to parse_int non-int", p)
@@ -226,7 +232,7 @@ def parse_int(p):
         raise TOMLDecodeError(f"invalid base {base} integer '{mv}'", p) from e
     return rv, p
 
-def parse_array(p):
+def parse_array(p: ParseState) -> Tuple[List[Any], ParseState]:
     rv = []
     atype = None
     if not p.at_string('['):
@@ -266,22 +272,23 @@ time_re = re.compile(time_res)
 datetime_re = re.compile(date_res + r"[T ]" + time_res +
                          r"(?P<tz>(Z|[+-]\d\d:\d\d))?")
 
-def date_from_string(o):
+def date_from_string(o: Match) -> datetime.date:
     year, month, day = [int(o.group(i)) for i in ['year', 'month', 'day']]
     rv = datetime.date(year, month, day)
     return rv
 
-def time_from_string(o):
+def time_from_string(o: Match) -> datetime.time:
     hour, minute, sec = [int(o.group(i)) for i in ['hr', 'min', 'sec']]
     msec_str = (o.group('msec') if o.group('msec') else "0")[:6]
     msec = int(msec_str) * 10 ** (6 - len(msec_str))
     rv = datetime.time(hour, minute, sec, msec)
     return rv
 
-def datetime_from_string(o):
+def datetime_from_string(o: Match) -> datetime.datetime:
     date = date_from_string(o)
     time = time_from_string(o)
     tz = o.group('tz')
+    tzi: Optional[datetime.timezone]
     if tz == 'Z':
         tzi = datetime.timezone.utc
     elif tz:
@@ -295,7 +302,9 @@ def datetime_from_string(o):
                            time.minute, time.second, time.microsecond, tzi)
     return rv
 
-def parse_datetime(p):
+def parse_datetime(p: ParseState) -> Tuple[Union[datetime.date, datetime.time,
+                                                 datetime.datetime],
+                                           ParseState]:
     o = datetime_re.match(p._string, pos=p._index)
     if o:
         p.advance(o.end() - o.pos)
@@ -314,10 +323,10 @@ def is_date_or_time(p):
     return (date_re.match(p._string, pos=p._index) or
             time_re.match(p._string, pos=p._index))
 
-def parse_inline_table(p):
+def parse_inline_table(p: ParseState) -> Tuple[Dict[str, Any], ParseState]:
     if not p.at_string('{'):
         raise TOMLDecodeError("tried to parse_inline_table non-table", p)
-    rv = {}
+    rv: Dict[str, Any] = {}
     p.advance(1)
     p.advance_through_class(" \t")
     while True:
@@ -349,7 +358,8 @@ def parse_inline_table(p):
                                   " in inline table", p)
     return rv, p
 
-def parse_dispatch_string(p, multiline_allowed=True):
+def parse_dispatch_string(p: ParseState, multiline_allowed:
+                          bool = True) -> Tuple[str, ParseState]:
     if p.at_string('"""'):
         if not multiline_allowed:
             raise TOMLDecodeError("multiline string where not allowed", p)
@@ -368,7 +378,8 @@ def parse_dispatch_string(p, multiline_allowed=True):
                               allow_newlines=False, whitespace_escape=False)
     return val, p
 
-def parse_value(p):
+def parse_value(p: ParseState) -> Tuple[Any, ParseState]:
+    val: Any
     if p.get(1) in ["'", '"']:
         val, p = parse_dispatch_string(p)
     elif p.at_string('['):
@@ -393,7 +404,7 @@ def parse_value(p):
 
 # characters allowed in unquoted keys
 key_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-def parse_key(p):
+def parse_key(p: ParseState) -> Tuple[str, ParseState]:
     ic = p.get(1)
     if ic in ['"', "'"]:
         k, p = parse_dispatch_string(p, multiline_allowed=False)
@@ -403,8 +414,8 @@ def parse_key(p):
         raise TOMLDecodeError(f"'{p.get(1)}' cannot begin key", p)
     return k, p
 
-def parse_keylist(p):
-    rv = []
+def parse_keylist(p: ParseState) -> Tuple[List[str], ParseState]:
+    rv: List[str] = []
     while True:
         k, p = parse_key(p)
         p.advance_through_class(" \t")
@@ -416,7 +427,7 @@ def parse_keylist(p):
             break
     return rv, p
 
-def parse_pair(p):
+def parse_pair(p: ParseState) -> Tuple[Tuple[Optional[List[str]], Any], ParseState]:
     if p.at_end():
         return (None, None), p
     kl, p = parse_keylist(p)
@@ -428,7 +439,7 @@ def parse_pair(p):
     v, p = parse_value(p)
     return (kl, v), p
 
-def parse_tablespec(p):
+def parse_tablespec(p: ParseState) -> Tuple[List[str], ParseState]:
     if not p.at_string('['):
         raise TOMLDecodeError("tried parse_tablespec on non-tablespec", p)
     p.advance(1)
@@ -448,7 +459,8 @@ def parse_tablespec(p):
         p.advance(1)
     return rv, p
 
-def proc_kl(rv, kl, tarray, p, toplevel_arrays):
+def proc_kl(rv: Dict[str, Any], kl: List[str], tarray: bool, p: ParseState,
+            toplevel_arrays: Set[int]) -> Dict[str, Any]:
     """Handle a table spec keylist, modifying rv in place; returns target"""
     c = rv
     if len(kl) == 0:
@@ -484,17 +496,18 @@ def proc_kl(rv, kl, tarray, p, toplevel_arrays):
             c[fk] = {}
         return c[fk]
 
-def loads(string):
+def loads(string: str) -> Dict[str, Any]:
     """Load TOML data from the string passed in, and return it as a dict."""
-    rv = {}
+    rv: Dict[str, Any] = {}
     cur_target = rv
     p = ParseState(string)
     first = True
     n = 0
     # this tracks tables we've already seen just so we can error out on
     # duplicates as spec requires
-    toplevel_targets = set()
-    toplevel_arrays = set()
+    toplevel_targets: Set[int] = set()
+    toplevel_arrays: Set[int] = set()
+    kl: Optional[List[str]]
     while not p.at_end():
         n2, p = parse_throwaway(p)
         n += n2

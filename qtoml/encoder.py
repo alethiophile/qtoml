@@ -3,10 +3,13 @@
 import datetime
 from .decoder import key_chars
 
+from typing import Dict, Any, IO, Union, Optional, Callable, Collection, List
+
 class TOMLEncodeError(Exception):
     pass
 
-def dump(obj, fp, **kwargs):
+def dump(obj: Dict[str, Any], fp: IO[str], encode_none:
+         Union[int, str, None] = None) -> None:
     """Take a dict that can be TOML-encoded, encode it, and write the data to the
     file-like object fp.
 
@@ -20,7 +23,8 @@ def dump(obj, fp, **kwargs):
     """
     fp.write(dumps(obj, **kwargs))
 
-def dumps(obj, **kwargs):
+def dumps(obj: Dict[str, Any], encode_none:
+          Union[int, str, None] = None) -> str:
     """Take a dict that can be TOML-encoded, and return an encoded string.
 
     dumps(obj, encode_none=None)
@@ -38,20 +42,22 @@ class TOMLEncoder:
     escapes = { "\b": "\\b", "\t": "\\t", "\n": "\\n", "\f": "\\f",
                 "\r": "\\r", "\"": "\\\"", "\\": "\\\\" }
 
-    def __init__(self, encode_none=None):
+    def __init__(self, encode_none: Optional[Union[int, str]] = None) -> None:
         self.encode_none = encode_none
-        self.st = { str: self.dump_str, bool: self.dump_bool,
-                    int: self.dump_int, float: self.dump_float,
-                    datetime.datetime: self.dump_datetime,
-                    datetime.date: self.dump_date,
-                    datetime.time: self.dump_time }
+        self.st: Dict[type, Callable[[Any], str]] = {
+            str: self.dump_str, bool: self.dump_bool,
+            int: self.dump_int, float: self.dump_float,
+            datetime.datetime: self.dump_datetime,
+            datetime.date: self.dump_date,
+            datetime.time: self.dump_time
+        }
 
-    def _st_lookup(self, v):
+    def _st_lookup(self, v: Any) -> Optional[Callable[[Any], str]]:
         for i in self.st:
             if isinstance(v, i):
                 return self.st[i]
 
-    def is_scalar(self, v, can_tarray=True):
+    def is_scalar(self, v: Any, can_tarray: bool = True) -> bool:
         if isinstance(v, tuple(self.st.keys())):
             return True
         if isinstance(v, (list, tuple)):
@@ -69,7 +75,7 @@ class TOMLEncoder:
             return True
         return False
 
-    def dump_bstr(self, s, multiline=False):
+    def dump_bstr(self, s: str, multiline: bool = False) -> str:
         delim = '"""' if multiline else '"'
         rv = delim
         for n, i in enumerate(s):
@@ -86,13 +92,13 @@ class TOMLEncoder:
         rv += delim
         return rv
 
-    def dump_rawstr(self, s, multiline=False):
+    def dump_rawstr(self, s: str, multiline: bool = False) -> str:
         delim = "'''" if multiline else "'"
         if delim in s:
             raise TOMLEncodeError("raw string delimiter in raw string")
         return delim + s + delim
 
-    def dump_str(self, s, multiline_allowed=True):
+    def dump_str(self, s: str, multiline_allowed: bool = True) -> str:
         """This handles newlines at the start of the string specially, since multiline
         strings must escape them.
 
@@ -107,13 +113,13 @@ class TOMLEncoder:
         else:
             return self.dump_rawstr(s, multiline)
 
-    def dump_bool(self, b):
+    def dump_bool(self, b: bool) -> str:
         return 'true' if b else 'false'
 
-    def dump_int(self, i):
+    def dump_int(self, i: int) -> str:
         return str(i)
 
-    def dump_float(self, i):
+    def dump_float(self, i: float) -> str:
         fv = str(i)
         # Python by default emits two-digit exponents with leading zeroes,
         # which violates the TOML spec.
@@ -123,19 +129,20 @@ class TOMLEncoder:
             fv = f + e + exp
         return fv
 
-    def dump_datetime(self, d):
+    def dump_datetime(self, d: datetime.datetime) -> str:
         rv = d.isoformat()
         if rv.endswith("+00:00"):
             rv = rv[:-6] + "Z"
         return rv
 
-    def dump_date(self, d):
+    def dump_date(self, d: datetime.date) -> str:
         return d.isoformat()
 
-    def dump_time(self, d):
+    def dump_time(self, d: datetime.time) -> str:
         return d.isoformat()
 
-    def dump_array(self, a):
+    # "Collection" means sized and iterable
+    def dump_array(self, a: Collection[Any]) -> str:
         rv = "["
         if len(a) == 0:
             return "[]"
@@ -151,19 +158,19 @@ class TOMLEncoder:
         rv = (rv[:-2] if rv.endswith(', ') else rv)
         return rv + "]"
 
-    def dump_itable(self, t):
+    def dump_itable(self, t: Dict[str, Any]) -> str:
         rv = "{ "
         for k, v in t.items():
             rv += f"{self.dump_key(k)} = {self.dump_value(v)}, "
         return (rv[:-2] if rv.endswith(", ") else rv) + " }"
 
-    def dump_key(self, k):
+    def dump_key(self, k: str) -> str:
         if len(k) > 0 and all(i in key_chars for i in k):
             return k
         else:
             return self.dump_str(k, multiline_allowed=False)
 
-    def dump_value(self, v):
+    def dump_value(self, v: Any) -> str:
         if isinstance(v, tuple(self.st.keys())):
             return self._st_lookup(v)(v)
         elif isinstance(v, (list, tuple)):
@@ -177,7 +184,8 @@ class TOMLEncoder:
         else:
             raise TypeError(f"bad type '{type(v)}' for dump_value")
 
-    def dump_sections(self, obj, obj_name, tarray):
+    def dump_sections(self, obj: Dict[str, Any], obj_name: List[str],
+                      tarray: bool) -> str:
         rv = ""
         if obj_name and (any(self.is_scalar(i) for i in obj.values()) or
                          tarray or len(obj) == 0):
