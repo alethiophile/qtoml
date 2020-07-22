@@ -14,6 +14,9 @@ class ParseState:
         self.col = col
         self.start_inds: List[int] = []
 
+    def range(self, a: int, b: int) -> str:
+        return self._string[a:b]
+
     def at_string(self, s: str) -> bool:
         return self._string[self._index:self._index + len(s)] == s
 

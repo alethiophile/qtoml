@@ -14,6 +14,7 @@ class TomlElem:
     def __init__(self, string: Optional[str] = None) -> None:
         if string is not None:
             self.string = string
+        self.newlines = False
 
     def __repr__(self) -> str:
         if hasattr(self, 'newlines') and self.newlines:
@@ -101,7 +102,7 @@ class ScalarValue(TomlElem):
             v, s = parse_datetime(p)
         else:
             raise TOMLDecodeError("can't parse scalar type", p)
-        return [cls(s, v)]
+        return [cls(p.range(*s), v)]
 
 class InlineDict(ComplexElem):
     pass
@@ -147,16 +148,16 @@ class DictElem(ComplexElem, Mapping):
                 rv.keydata[pair.key.value] = pair
         return rv
 
-def parse_throwaway(p):
-    s = ""
-    while True:
-        s += p.advance_through_class(" \t\r\n")
-        if p.at_string("#"):
-            s += p.advance_until("\n")
-        else:
-            break
-    lines = s.count("\n")
-    return lines, p
+# def parse_throwaway(p):
+#     s = ""
+#     while True:
+#         s += p.advance_through_class(" \t\r\n")
+#         if p.at_string("#"):
+#             s += p.advance_until("\n")
+#         else:
+#             break
+#     lines = s.count("\n")
+#     return lines, p
 
 def parse_blanklines(p: ParseState,
                      require_newlines: bool = False) -> List[TomlElem]:
@@ -181,7 +182,7 @@ def parse_pair(p: ParseState) -> List[DataPair]:
     rv: List[TomlElem] = []
 
     k, s = parse_key(p)
-    key = Key(s, k)
+    key = Key(p.range(*s), k)
     rv.append(key)
 
     rv.extend(Whitespace.parse(p, allow_newlines=False))
