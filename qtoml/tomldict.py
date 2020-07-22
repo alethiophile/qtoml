@@ -158,8 +158,9 @@ def parse_throwaway(p):
     lines = s.count("\n")
     return lines, p
 
-def parse_blanklines(p, require_newlines=False):
-    rv = []
+def parse_blanklines(p: ParseState,
+                     require_newlines: bool = False) -> List[TomlElem]:
+    rv: List[TomlElem] = []
     while True:
         rv.extend(Whitespace.parse(p, allow_newlines=True,
                                    require_newlines=False))
