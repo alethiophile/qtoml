@@ -1,17 +1,21 @@
 #!python3
 
+from __future__ import annotations
+
 from .decoder import (parse_key, parse_dispatch_string, parse_int, parse_float,
                       parse_datetime, int_re, float_re, is_date_or_time)
 from .common import ParseState, TOMLDecodeError
 from collections.abc import Mapping
 import click, pprint
 
+from typing import Optional, Any, List, Dict, Iterator, Union, IO
+
 class TomlElem:
-    def __init__(self, string=None):
+    def __init__(self, string: Optional[str] = None) -> None:
         if string is not None:
             self.string = string
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if hasattr(self, 'newlines') and self.newlines:
             nl, ss = '\n', '  '
         else:
@@ -31,7 +35,7 @@ class TomlElem:
         return rv
 
 class ComplexElem(TomlElem):
-    def __init__(self, data):
+    def __init__(self, data: Any) -> None:
         self.data = data
 
     @property
@@ -39,13 +43,15 @@ class ComplexElem(TomlElem):
         return ''.join(i.string for i in self.data)
 
 class Whitespace(TomlElem):
-    def __init__(self, allow_newlines, require_newlines, string=None):
+    def __init__(self, allow_newlines: bool, require_newlines: bool,
+                 string: str = None) -> None:
         self.allow_newlines = allow_newlines
         self.require_newlines = require_newlines
         super().__init__(string)
 
     @classmethod
-    def parse(cls, p, allow_newlines=True, require_newlines=False):
+    def parse(cls, p: ParseState, allow_newlines: bool = True,
+              require_newlines: bool = False) -> List[Whitespace]:
         wsc = " \t"
         if allow_newlines:
             wsc += "\r\n"
@@ -58,7 +64,7 @@ class Whitespace(TomlElem):
 
 class Comment(TomlElem):
     @classmethod
-    def parse(cls, p):
+    def parse(cls, p: ParseState) -> List[Comment]:
         if not p.at_string('#'):
             raise TOMLDecodeError("Tried to parse comment at non-comment", p)
         sv = p.advance_until('\n')
@@ -69,21 +75,22 @@ class Comment(TomlElem):
         return [cls(sv)]
 
 class Key(TomlElem):
-    def __init__(self, string, value):
+    def __init__(self, string: str, value: Any) -> None:
         self.value = value
         super().__init__(string)
 
 class Punct(TomlElem):
-    def __init__(self, string):
+    def __init__(self, string: str) -> None:
         super().__init__(string)
 
 class ScalarValue(TomlElem):
-    def __init__(self, string, value):
+    def __init__(self, string: str, value: Any) -> None:
         self.value = value
         super().__init__(string)
 
     @classmethod
-    def parse(cls, p):
+    def parse(cls, p: ParseState) -> List[ScalarValue]:
+        v: Any
         if p.get(1) in ['"', "'"]:
             v, s = parse_dispatch_string(p)
         elif p.at_re(int_re):
@@ -105,7 +112,7 @@ class InlineArray(ComplexElem):
 class DataPair(ComplexElem):
     newlines = True
 
-    def __init__(self, data, key, value):
+    def __init__(self, data: Any, key: Any, value: Any) -> None:
         self.key = key
         self.value = value
         super().__init__(data)
@@ -113,22 +120,22 @@ class DataPair(ComplexElem):
 class DictElem(ComplexElem, Mapping):
     newlines = True
 
-    def __init__(self):
-        self.keydata = {}
+    def __init__(self) -> None:
+        self.keydata: Dict[str, Any] = {}
         super().__init__([])
 
-    def __getitem__(self, y):
+    def __getitem__(self, y: str) -> Any:
         return self.keydata[y].value.value
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         for i in self.keydata:
             yield i
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.keydata)
 
     @classmethod
-    def parse(cls, p):
+    def parse(cls, p: ParseState) -> DictElem:
         rv = cls()
         while True:
             rv.data.extend(parse_blanklines(p))
@@ -169,8 +176,8 @@ def parse_blanklines(p, require_newlines=False):
             raise TOMLDecodeError("Required newline not found", p)
     return rv
 
-def parse_pair(p):
-    rv = []
+def parse_pair(p: ParseState) -> List[DataPair]:
+    rv: List[TomlElem] = []
 
     k, s = parse_key(p)
     key = Key(s, k)
@@ -190,14 +197,14 @@ def parse_pair(p):
     return [DataPair(rv, key, value)]
 
 class TomlDict(Mapping):
-    def __init__(self, toml_string):
+    def __init__(self, toml_string: Union[str, IO[str]]) -> None:
         # self._data = []
         # self._data = DictElem()
-        if hasattr(toml_string, 'read'):
+        if not isinstance(toml_string, str):
             toml_string = toml_string.read()
         self._parse(toml_string)
 
-    def _parse(self, toml_string):
+    def _parse(self, toml_string: str) -> None:
         p = ParseState(toml_string)
         self._data = DictElem.parse(p)
         # self._data.parse(p)
@@ -210,22 +217,22 @@ class TomlDict(Mapping):
     #         self._data.extend(parse_blanklines(p))
 
     @property
-    def string(self):
+    def string(self) -> str:
         return self._data.string
 
-    def __getitem__(self, y):
+    def __getitem__(self, y: str) -> Any:
         return self._data[y]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         return iter(self._data)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._data)
 
 
 @click.command()
 @click.argument('inp', type=click.File('r'))
-def tomldict_test(inp):
+def tomldict_test(inp: IO[str]) -> None:
     inp_str = inp.read()
     d = TomlDict(inp_str)
     pprint.pprint(d._data, indent=2, width=140)

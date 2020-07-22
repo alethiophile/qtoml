@@ -1,6 +1,6 @@
 #!python3
 
-from typing import Container
+from typing import Container, List, Pattern
 
 class ParseState:
     """A parser state. Holds the entire input string, advances through it as
@@ -12,13 +12,13 @@ class ParseState:
         self._index = 0
         self.line = line
         self.col = col
-        self.start_inds = []
+        self.start_inds: List[int] = []
 
     def at_string(self, s: str) -> bool:
         return self._string[self._index:self._index + len(s)] == s
 
-    def at_re(self, re):
-        return re.match(self._string, pos=self._index)
+    def at_re(self, re: Pattern) -> bool:
+        return bool(re.match(self._string, pos=self._index))
 
     def at_end(self) -> bool:
         return self._index >= len(self._string)
@@ -71,10 +71,10 @@ class ParseState:
         ls = self._string.rfind('\n', 0, self._index) + 1
         self.col = self._index - ls
 
-    def capture_string(self):
+    def capture_string(self) -> None:
         self.start_inds.append(self._index)
 
-    def string_val(self):
+    def string_val(self) -> str:
         if len(self.start_inds) == 0:
             raise RuntimeError("tried string_val without captured index")
         i = self.start_inds.pop()
