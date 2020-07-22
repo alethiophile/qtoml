@@ -13,7 +13,8 @@ def load(fo: IO[str]) -> Dict[str, Any]:
     s = fo.read()
     return loads(s)
 
-def parse_throwaway(p: ParseState) -> Tuple[int, ParseState]:
+def parse_throwaway(p: ParseState) -> Tuple[int, Tuple[int, int]]:
+    iv = p._index
     s = ""
     while True:
         s += p.advance_through_class(" \t\r\n")
@@ -22,7 +23,7 @@ def parse_throwaway(p: ParseState) -> Tuple[int, ParseState]:
         else:
             break
     lines = s.count("\n")
-    return lines, p
+    return lines, (iv, p._index)
 
 def class_partition(cls: str, string: str) -> Tuple[str, str]:
     """Given a set of characters and a string, take the longest prefix made up of
@@ -47,7 +48,9 @@ escape_vals: Dict[str, str] = {
 }
 def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
                  allow_newlines: bool = False,
-                 whitespace_escape: bool = False) -> Tuple[str, ParseState]:
+                 whitespace_escape: bool = False) -> Tuple[str, Tuple[int,
+                                                                      int]]:
+    iv = p._index
     if not p.at_string(delim):
         raise TOMLDecodeError(f"string doesn't begin with delimiter '{delim}'",
                               p)
@@ -131,15 +134,15 @@ def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
             raise TOMLDecodeError(f"\\{ev} not a valid escape", p)
         sv = sv[:bs] + subst + sv[escape_end:]
         last_subst = subst
-    ss = p.string_val()
-    return sv, ss  # .advance(adv_len)
+    # ss = p.string_val()
+    return sv, (iv, p._index)  # .advance(adv_len)
 
 float_re = re.compile(r"[+-]?(inf|nan|(([0-9]|[1-9][0-9_]*[0-9])" +
                       r"(?P<frac>\.([0-9]|[0-9][0-9_]*[0-9]))?" +
                       r"(?P<exp>[eE][+-]?([0-9]|[0-9][0-9_]*[0-9]))?))" +
                       r"(?=([\s,\]}]|$))")
-def parse_float(p: ParseState) -> Tuple[float, ParseState]:
-    p.capture_string()
+def parse_float(p: ParseState) -> Tuple[float, Tuple[int, int]]:
+    iv = p._index
     o = float_re.match(p._string, pos=p._index)
     if o is None:
         raise TOMLDecodeError("tried to parse_float non-float", p)
@@ -152,14 +155,13 @@ def parse_float(p: ParseState) -> Tuple[float, ParseState]:
         raise TOMLDecodeError("double underscore in number", p)
     sv = mv.replace('_', '')
     rv = float(sv)
-    s = p.string_val()
-    return rv, s
+    return rv, (iv, p._index)
 
 int_re = re.compile(r"((0[xob][0-9a-fA-F_]+)|" +
                     r"([+-]?([0-9]|[1-9][0-9_]*[0-9])))" +
                     r"(?=[\s,\]}]|$)")
-def parse_int(p: ParseState) -> Tuple[int, ParseState]:
-    p.capture_string()
+def parse_int(p: ParseState) -> Tuple[int, Tuple[int, int]]:
+    iv = p._index
     o = int_re.match(p._string, pos=p._index)
     if o is None:
         raise TOMLDecodeError("tried to parse_int non-int", p)
@@ -182,25 +184,25 @@ def parse_int(p: ParseState) -> Tuple[int, ParseState]:
         rv = int(sv, base=base)
     except ValueError as e:
         raise TOMLDecodeError(f"invalid base {base} integer '{mv}'", p) from e
-    s = p.string_val()
-    return rv, s
+    return rv, (iv, p._index)
 
-def parse_array(p: ParseState) -> Tuple[List[Any], ParseState]:
+def parse_array(p: ParseState) -> Tuple[List[Any], Tuple[int, int]]:
+    iv = p._index
     rv = []
     if not p.at_string('['):
         raise TOMLDecodeError("tried to parse_array non-array", p)
     p.advance(1)
-    n, p = parse_throwaway(p)
+    n, _ = parse_throwaway(p)
     while True:
         if p.at_string(']'):
             p.advance(1)
             break
-        v, p = parse_value(p)
+        v, _ = parse_value(p)
         rv.append(v)
-        n, p = parse_throwaway(p)
+        n, _ = parse_throwaway(p)
         if p.at_string(','):
             p.advance(1)
-            n, p = parse_throwaway(p)
+            n, _ = parse_throwaway(p)
             continue
         if p.at_string(']'):
             p.advance(1)
@@ -208,7 +210,7 @@ def parse_array(p: ParseState) -> Tuple[List[Any], ParseState]:
         else:
             raise TOMLDecodeError(f"bad next char {repr(p.get(1))} in array",
                                   p)
-    return rv, p
+    return rv, (iv, p._index)
 
 
 date_res = r"(?P<year>\d{4})-(?P<month>\d\d)-(?P<day>\d\d)"
@@ -252,27 +254,28 @@ def datetime_from_string(o: Match) -> datetime.datetime:
 
 def parse_datetime(p: ParseState) -> Tuple[Union[datetime.date, datetime.time,
                                                  datetime.datetime],
-                                           ParseState]:
-    p.capture_string()
+                                           Tuple[int, int]]:
+    iv = p._index
     o = datetime_re.match(p._string, pos=p._index)
     if o:
         p.advance(o.end() - o.pos)
-        return datetime_from_string(o), p.string_val()
+        return datetime_from_string(o), (iv, p._index)
     o = time_re.match(p._string, pos=p._index)
     if o:
         p.advance(o.end() - o.pos)
-        return time_from_string(o), p.string_val()
+        return time_from_string(o), (iv, p._index)
     o = date_re.match(p._string, pos=p._index)
     if o:
         p.advance(o.end() - o.pos)
-        return date_from_string(o), p.string_val()
+        return date_from_string(o), (iv, p._index)
     raise TOMLDecodeError("failed to parse datetime (shouldn't happen)", p)
 
 def is_date_or_time(p: ParseState) -> bool:
     return (bool(date_re.match(p._string, pos=p._index)) or
             bool(time_re.match(p._string, pos=p._index)))
 
-def parse_inline_table(p: ParseState) -> Tuple[Dict[str, Any], ParseState]:
+def parse_inline_table(p: ParseState) -> Tuple[Dict[str, Any], Tuple[int, int]]:
+    iv = p._index
     if not p.at_string('{'):
         raise TOMLDecodeError("tried to parse_inline_table non-table", p)
     rv: Dict[str, Any] = {}
@@ -282,13 +285,13 @@ def parse_inline_table(p: ParseState) -> Tuple[Dict[str, Any], ParseState]:
         if p.at_string('}'):
             p.advance(1)
             break
-        kl, p = parse_keylist(p)
+        kl, _ = parse_keylist(p)
         p.advance_through_class(" \t")
         if not p.at_string('='):
             raise TOMLDecodeError(f"no = after key {kl} in inline", p)
         p.advance(1)
         p.advance_through_class(" \t")
-        v, p = parse_value(p)
+        v, _ = parse_value(p)
         p.advance_through_class(" \t")
         target = proc_kl(rv, kl[:-1], False, p, set())
         k = kl[-1]
@@ -305,10 +308,10 @@ def parse_inline_table(p: ParseState) -> Tuple[Dict[str, Any], ParseState]:
         else:
             raise TOMLDecodeError(f"bad next char {repr(p.get(1))}" +
                                   " in inline table", p)
-    return rv, p
+    return rv, (iv, p._index)
 
 def parse_dispatch_string(p: ParseState, multiline_allowed:
-                          bool = True) -> Tuple[str, ParseState]:
+                          bool = True) -> Tuple[str, Tuple[int, int]]:
     if p.at_string('"""'):
         if not multiline_allowed:
             raise TOMLDecodeError("multiline string where not allowed", p)
@@ -327,14 +330,15 @@ def parse_dispatch_string(p: ParseState, multiline_allowed:
                               allow_newlines=False, whitespace_escape=False)
     return val, s
 
-def parse_value(p: ParseState) -> Tuple[Any, ParseState]:
+def parse_value(p: ParseState) -> Tuple[Any, Tuple[int, int]]:
+    iv = p._index
     val: Any
     if p.get(1) in ["'", '"']:
         val, _ = parse_dispatch_string(p)
     elif p.at_string('['):
-        val, p = parse_array(p)
+        val, _ = parse_array(p)
     elif p.at_string('{'):
-        val, p = parse_inline_table(p)
+        val, _ = parse_inline_table(p)
     elif p.at_string('true'):
         val = True
         p.advance(4)
@@ -349,12 +353,12 @@ def parse_value(p: ParseState) -> Tuple[Any, ParseState]:
         val, _ = parse_datetime(p)
     else:
         raise TOMLDecodeError("can't parse type", p)
-    return val, p
+    return val, (iv, p._index)
 
 # characters allowed in unquoted keys
 key_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-def parse_key(p: ParseState) -> Tuple[str, ParseState]:
-    p.capture_string()
+def parse_key(p: ParseState) -> Tuple[str, Tuple[int, int]]:
+    iv = p._index
     ic = p.get(1)
     if ic in ['"', "'"]:
         k, _ = parse_dispatch_string(p, multiline_allowed=False)
@@ -362,10 +366,10 @@ def parse_key(p: ParseState) -> Tuple[str, ParseState]:
         k = p.advance_through_class(key_chars)
     else:
         raise TOMLDecodeError(f"'{p.get(1)}' cannot begin key", p)
-    s = p.string_val()
-    return k, s
+    return k, (iv, p._index)
 
-def parse_keylist(p: ParseState) -> Tuple[List[str], ParseState]:
+def parse_keylist(p: ParseState) -> Tuple[List[str], Tuple[int, int]]:
+    iv = p._index
     rv: List[str] = []
     while True:
         k, _ = parse_key(p)
@@ -376,22 +380,24 @@ def parse_keylist(p: ParseState) -> Tuple[List[str], ParseState]:
             p.advance_through_class(" \t")
         else:
             break
-    return rv, p
+    return rv, (iv, p._index)
 
 def parse_pair(p: ParseState) -> Tuple[Tuple[Optional[List[str]], Any],
-                                       ParseState]:
+                                       Tuple[int, int]]:
+    iv = p._index
     if p.at_end():
-        return (None, None), p
-    kl, p = parse_keylist(p)
+        return (None, None), (iv, iv)
+    kl, _ = parse_keylist(p)
     p.advance_through_class(" \t")
     if not p.at_string('='):
         raise TOMLDecodeError(f"no = following key '\"{kl}\"'", p)
     p.advance(1)
     p.advance_through_class(" \t")
-    v, p = parse_value(p)
-    return (kl, v), p
+    v, _ = parse_value(p)
+    return (kl, v), (iv, p._index)
 
-def parse_tablespec(p: ParseState) -> Tuple[List[str], ParseState]:
+def parse_tablespec(p: ParseState) -> Tuple[List[str], Tuple[int, int]]:
+    iv = p._index
     if not p.at_string('['):
         raise TOMLDecodeError("tried parse_tablespec on non-tablespec", p)
     p.advance(1)
@@ -400,7 +406,7 @@ def parse_tablespec(p: ParseState) -> Tuple[List[str], ParseState]:
         p.advance(1)
         tarray = True
     p.advance_through_class(" \t")
-    rv, p = parse_keylist(p)
+    rv, _ = parse_keylist(p)
     if not p.at_string(']'):
         raise TOMLDecodeError(f"Bad char {repr(p.get(1))} in tablespec",
                               p)
@@ -409,7 +415,7 @@ def parse_tablespec(p: ParseState) -> Tuple[List[str], ParseState]:
         if not p.at_string(']'):
             raise TOMLDecodeError(f"Didn't close tarray properly", p)
         p.advance(1)
-    return rv, p
+    return rv, (iv, p._index)
 
 def proc_kl(rv: Dict[str, Any], kl: List[str], tarray: bool, p: ParseState,
             toplevel_arrays: Set[int]) -> Dict[str, Any]:
@@ -461,7 +467,7 @@ def loads(string: str) -> Dict[str, Any]:
     toplevel_arrays: Set[int] = set()
     kl: Optional[List[str]]
     while not p.at_end():
-        n2, p = parse_throwaway(p)
+        n2, _ = parse_throwaway(p)
         n += n2
         if not first:
             if n == 0:
@@ -470,13 +476,13 @@ def loads(string: str) -> Dict[str, Any]:
             first = False
         if p.at_string('['):
             tarray = p.get(2) == '[['
-            kl, p = parse_tablespec(p)
+            kl, _ = parse_tablespec(p)
             cur_target = proc_kl(rv, kl, tarray, p, toplevel_arrays)
             if id(cur_target) in toplevel_targets:
                 raise TOMLDecodeError(f"duplicated table {kl}", p)
             toplevel_targets.add(id(cur_target))
         else:
-            (kl, v), p = parse_pair(p)
+            (kl, v), _ = parse_pair(p)
             if kl is not None:
                 if type(v) == list:
                     toplevel_arrays.add(id(v))
@@ -485,5 +491,5 @@ def loads(string: str) -> Dict[str, Any]:
                 if k in target:
                     raise TOMLDecodeError(f"Key '{k}' is repeated", p)
                 target[k] = v
-        n, p = parse_throwaway(p)
+        n, _ = parse_throwaway(p)
     return rv
