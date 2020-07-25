@@ -8,41 +8,18 @@ from typing import Dict, Any, IO, Union, Optional, Callable, Collection, List
 class TOMLEncodeError(Exception):
     pass
 
-def dump(obj: Dict[str, Any], fp: IO[str], encode_none:
-         Union[int, str, None] = None) -> None:
-    """Take a dict that can be TOML-encoded, encode it, and write the data to the
-    file-like object fp.
-
-    dump(obj, fp, encode_none=None)
-
-    Because TOML does not support None/null values, by default any structure
-    containing None will error on encode. If you pass the encode_none
-    parameter, None will instead be encoded as that parameter. Sensible values
-    might include 0, empty string, or a unique string sentinel value.
-
-    """
-    fp.write(dumps(obj, encode_none))
-
-def dumps(obj: Dict[str, Any], encode_none:
-          Union[int, str, None] = None) -> str:
-    """Take a dict that can be TOML-encoded, and return an encoded string.
-
-    dumps(obj, encode_none=None)
-
-    Because TOML does not support None/null values, by default any structure
-    containing None will error on encode. If you pass the encode_none
-    parameter, None will instead be encoded as that parameter. Sensible values
-    might include 0, empty string, or a unique string sentinel value.
-
-    """
-    return TOMLEncoder(encode_none).dump_sections(obj, [], False)
-
 class TOMLEncoder:
     # spec-defined string escapes
     escapes = { "\b": "\\b", "\t": "\\t", "\n": "\\n", "\f": "\\f",
                 "\r": "\\r", "\"": "\\\"", "\\": "\\\\" }
 
     def __init__(self, encode_none: Optional[Union[int, str]] = None) -> None:
+        """Create a TOML encoder.
+
+        encode_none: the value that should replace instances of None within the
+        output (if not set, any None values will raise an exception)
+
+        """
         self.encode_none = encode_none
         self.st: Dict[type, Callable[[Any], str]] = {
             str: self.dump_str, bool: self.dump_bool,
@@ -52,11 +29,45 @@ class TOMLEncoder:
             datetime.time: self.dump_time
         }
 
+    def encode(self, obj: Any) -> str:
+        o = self._get_encodable_object(obj)
+        return self.dump_sections(o, [], False)
+
+    def _get_encodable_object(self, obj: Any) -> Any:
+        try:
+            rv = self.default(obj)
+        except (TypeError, TOMLEncodeError):
+            if self._is_encodable_type(obj):
+                return obj
+            raise TOMLEncodeError(f"object of non-encodable type {type(obj)}")
+        if not self._is_encodable_type(rv):
+            raise TOMLEncodeError(f"self.default() returned non-encodable "
+                                  f"object of type {type(rv)}")
+        return rv
+
     def _st_lookup(self, v: Any) -> Optional[Callable[[Any], str]]:
         for i in self.st:
             if isinstance(v, i):
                 return self.st[i]
         return None
+
+    def _is_encodable_type(self, v: Any) -> bool:
+        if (isinstance(v, tuple(self.st.keys())) or
+            isinstance(v, (list, tuple, dict))):
+            return True
+        if v is None:
+            return (self.encode_none is not None and
+                    self._is_encodable_type(self.encode_none))
+        return False
+
+    def default(self, val: Any) -> Any:
+        """This method should take any value and, if possible, return a TOML-encodable
+        equivalent. If the value is not encodable, raise TypeError.
+
+        The default implementation always raises TypeError.
+
+        """
+        raise TypeError(f"object of non-TOML-encodable type {type(val)}")
 
     def is_scalar(self, v: Any, can_tarray: bool = True) -> bool:
         if isinstance(v, tuple(self.st.keys())):
@@ -185,6 +196,8 @@ class TOMLEncoder:
 
     def dump_sections(self, obj: Dict[str, Any], obj_name: List[str],
                       tarray: bool) -> str:
+        # dump_sections should only be called on an object that has already
+        # been passed through _get_encodable_object
         rv = ""
         if obj_name and (any(self.is_scalar(i) for i in obj.values()) or
                          tarray or len(obj) == 0):
@@ -192,19 +205,21 @@ class TOMLEncoder:
             rv += '.'.join(self.dump_key(i) for i in obj_name)
             rv += "]]\n" if tarray else "]\n"
         dumped_keys = set()
+        encodable_pairs = [ (k, self._get_encodable_object(v))
+                            for k, v in obj.items() ]
         # we dump first all scalars, then all single tables, then all table
         # arrays
-        for k, v in obj.items():
+        for k, v in encodable_pairs:
             if self.is_scalar(v):
                 rv += f"{self.dump_key(k)} = {self.dump_value(v)}\n"
                 dumped_keys.add(k)
-        for k, v in obj.items():
+        for k, v in encodable_pairs:
             if isinstance(v, dict):
                 if len(rv) > 0:
                     rv += "\n"
                 rv += self.dump_sections(v, obj_name + [k], False)
                 dumped_keys.add(k)
-        for k, v in obj.items():
+        for k, v in encodable_pairs:
             if isinstance(v, list) and not self.is_scalar(v):
                 for ent in v:
                     if len(rv) > 0:
@@ -220,3 +235,34 @@ class TOMLEncoder:
             raise TOMLEncodeError("got object of non-encodable type on key "
                                   f"'{'.'.join(kl)}'")
         return rv
+
+def dump(obj: Dict[str, Any], fp: IO[str],
+         encode_none: Union[int, str, None] = None,
+         cls: type = TOMLEncoder) -> None:
+    """Take a dict that can be TOML-encoded, encode it, and write the data to the
+    file-like object fp.
+
+    dump(obj, fp, encode_none=None)
+
+    Because TOML does not support None/null values, by default any structure
+    containing None will error on encode. If you pass the encode_none
+    parameter, None will instead be encoded as that parameter. Sensible values
+    might include 0, empty string, or a unique string sentinel value.
+
+    """
+    fp.write(dumps(obj, encode_none, cls=cls))
+
+def dumps(obj: Dict[str, Any], encode_none:
+          Union[int, str, None] = None,
+          cls: type = TOMLEncoder) -> str:
+    """Take a dict that can be TOML-encoded, and return an encoded string.
+
+    dumps(obj, encode_none=None)
+
+    Because TOML does not support None/null values, by default any structure
+    containing None will error on encode. If you pass the encode_none
+    parameter, None will instead be encoded as that parameter. Sensible values
+    might include 0, empty string, or a unique string sentinel value.
+
+    """
+    return cls(encode_none).encode(obj)
