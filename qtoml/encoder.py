@@ -205,6 +205,8 @@ class TOMLEncoder:
             rv += '.'.join(self.dump_key(i) for i in obj_name)
             rv += "]]\n" if tarray else "]\n"
         dumped_keys = set()
+        if any(not isinstance(i, str) for i in obj.keys()):
+            raise TOMLEncodeError("dictionary keys must all be strings")
         encodable_pairs = [ (k, self._get_encodable_object(v))
                             for k, v in obj.items() ]
         # we dump first all scalars, then all single tables, then all table

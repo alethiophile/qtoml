@@ -31,3 +31,17 @@ def test_encode_subclass():
     # cycle value is a plain dictionary, so this comparison is
     # order-insensitive
     assert value == cycle
+
+def test_non_str_keys():
+    value = { 1: 'foo' }
+    with pytest.raises(qtoml.TOMLEncodeError):
+        qtoml.dumps(value)
+
+    class EnsureStringKeys(qtoml.TOMLEncoder):
+        def default(self, o):
+            if isinstance(o, dict):
+                return { str(k): v for k, v in o.items() }
+            return super().default(o)
+
+    v = EnsureStringKeys().encode(value)
+    assert qtoml.loads(v) == { '1': 'foo' }
