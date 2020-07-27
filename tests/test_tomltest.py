@@ -7,6 +7,12 @@ from contextlib import redirect_stdout, redirect_stderr, contextmanager
 from qtoml.__main__ import untag
 
 def patch_floats(d):
+    """This function recursively replaces all floats with NaN values with the
+    string 'NaN', all the way down the nested data structure passed in. This is
+    to allow those structures to be compared using straightforward ==, since
+    otherwise the NaN float values will compare unequal to each other.
+
+    """
     if type(d) == float and math.isnan(d):
         return 'NaN'
     elif type(d) == dict:
