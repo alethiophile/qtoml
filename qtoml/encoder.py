@@ -198,17 +198,18 @@ class TOMLEncoder:
                       tarray: bool) -> str:
         # dump_sections should only be called on an object that has already
         # been passed through _get_encodable_object
+        if any(not isinstance(i, str) for i in obj.keys()):
+            raise TOMLEncodeError("dictionary keys must all be strings")
+        encodable_pairs = [ (k, self._get_encodable_object(v))
+                            for k, v in obj.items() ]
+        vlist = [v for k, v in encodable_pairs]
         rv = ""
-        if obj_name and (any(self.is_scalar(i) for i in obj.values()) or
+        if obj_name and (any(self.is_scalar(i) for i in vlist) or
                          tarray or len(obj) == 0):
             rv += "[[" if tarray else "["
             rv += '.'.join(self.dump_key(i) for i in obj_name)
             rv += "]]\n" if tarray else "]\n"
         dumped_keys = set()
-        if any(not isinstance(i, str) for i in obj.keys()):
-            raise TOMLEncodeError("dictionary keys must all be strings")
-        encodable_pairs = [ (k, self._get_encodable_object(v))
-                            for k, v in obj.items() ]
         # we dump first all scalars, then all single tables, then all table
         # arrays
         for k, v in encodable_pairs:
