@@ -31,9 +31,13 @@ def test_encode_path():
                 return obj.as_posix()
             return super().default(obj)
 
-    pval = { 'path': Path("foo") / "bar" }
+    pval = { 'top': { 'path': Path("foo") / "bar" } }
+    sval = { 'top': { 'path': "foo/bar" } }
     v = PathEncoder().encode(pval)
     v2 = qtoml.dumps(pval, cls=PathEncoder)
     assert v == v2
     nv = qtoml.loads(v)
-    assert nv == { 'path': 'foo/bar' }
+    assert nv == { 'top': { 'path': 'foo/bar' } }
+
+    v3 = qtoml.dumps(sval, cls=PathEncoder)
+    assert v == v3
