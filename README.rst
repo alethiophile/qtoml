@@ -66,7 +66,7 @@ management. To check out the project for development, run:
 
 .. code:: bash
 
-  $ git clone --recursive-submodules https://github.com/alethiophile/qtoml
+  $ git clone --recurse-submodules https://github.com/alethiophile/qtoml
   $ cd qtoml
   $ poetry install
 
