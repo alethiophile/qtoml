@@ -1,7 +1,7 @@
 #!python3
 
 import datetime
-from .decoder import key_chars
+from .decoder import key_chars, control_chars
 
 from typing import Dict, Any, IO, Union, Optional, Callable, Collection, List
 
@@ -91,7 +91,7 @@ class TOMLEncoder:
         delim = '"""' if multiline else '"'
         rv = delim
         for n, i in enumerate(s):
-            if ord(i) < 32 or i in '\\"':
+            if i in control_chars + ["\n"] or i in '\\"':
                 if i == '\n' and multiline and n != 0:
                     rv += i
                 elif i in self.escapes:
@@ -117,7 +117,7 @@ class TOMLEncoder:
         """
         multiline = "\n" in s[1:]
         if (("'" in s and not multiline) or "'''" in s or
-            any(ord(i) < 32 and i != "\n" for i in s) or
+            any(i in control_chars for i in s) or
             (multiline and not multiline_allowed) or
             s.startswith("\n") or s.endswith("'")):
             # can't put these in raw string

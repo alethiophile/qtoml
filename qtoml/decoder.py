@@ -118,6 +118,8 @@ escape_vals: Dict[str, str] = {
     'b': "\b", 't': "\t", 'n': "\n", 'f': "\f", 'r': "\r",
     '"': '"', '\\': '\\'
 }
+control_chars = [chr(i) for i in list(range(0, 9)) + list(range(11, 32)) +
+                 [127]]
 def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
                  allow_newlines: bool = False,
                  whitespace_escape: bool = False) -> Tuple[str, ParseState]:
@@ -149,8 +151,6 @@ def parse_string(p: ParseState, delim: str = '"', allow_escapes: bool = True,
     sv = sv[:-len(delim)]
     if "\n" in sv and not allow_newlines:
         raise TOMLDecodeError("newline in basic string", p)
-    control_chars = [chr(i) for i in list(range(0, 9)) + list(range(11, 32)) +
-                     [127]]
     if any(i in control_chars for i in sv):
         raise TOMLDecodeError("unescaped control character in string", p)
     if allow_newlines and sv.startswith("\n"):
