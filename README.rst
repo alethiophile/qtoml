@@ -1,3 +1,18 @@
+****************
+DEPRECATION NOTE
+****************
+
+**qTOML is now deprecated.** It will not be updated further.
+
+In replacement for qTOML, I endorse the `tomllib
+<https://docs.python.org/3/library/tomllib.html>`_ standard library
+module for Python 3.11+, or `tomli <https://github.com/hukkin/tomli>`_
+for earlier versions. In either case, `tomli-w
+<https://github.com/hukkin/tomli-w>`_ is available for writing.
+
+These libraries satisfy the use case I had for writing qTOML to begin
+with, making this version redundant.
+
 *****
 qTOML
 *****
